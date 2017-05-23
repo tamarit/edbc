@@ -1,1 +1,1 @@
-# edbc
+# Erlang Design By Contract
