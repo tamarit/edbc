@@ -4,19 +4,6 @@
 -include_lib("edbc.hrl").
 
 
-    % case begin C23 == 1 end of
-    %   true -> 
-    %   	R = g2(C23),
-    %   	case begin R >= C23 end of 
-    %   		true -> 
-    %   			R;
-    %   		false -> 
-    %   			erlang:error("The post-condition is not hold")
-    %   	end;
-    %   false -> 
-    %   	erlang:error("The pre-condition is not hold")
-    % end.
-
 ?PRE(fun pre_f/0).
 f(0) -> 1;
 f(N) -> 
