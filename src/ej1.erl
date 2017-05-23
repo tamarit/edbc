@@ -22,7 +22,7 @@ f(0) -> 1;
 f(N) -> 
 	% ?PRE_I(fun pre_f/0),
 	f(N-1) * 2.
-% ?POST(fun post_f/0).
+?POST(fun post_f/0).
 
 ?PRE(fun pre_g/0).
 g(1) -> 1.
@@ -34,8 +34,8 @@ h(X, Y) ->
 pre_f() -> 
 	?P(1) >= 0.
 
-% post_f() -> 
-% 	?R() >= ?P(1).
+post_f() -> 
+	?R() =< ?P(1).
 
 pre_g() -> 
 	?P(1) == 1.

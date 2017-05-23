@@ -20,25 +20,21 @@ parse_transform(Forms, _Options) ->
 		FormsAnnBindings),
 	edbc_free_vars_server!all_variables_added,
 	FormsPreTrans = 
-		transform_pres(FormsAnnBindings ,[], []),
+		transform(FormsAnnBindings ,[], []),
 	NewForms = 
 		[erl_syntax:revert(IF) || IF <- FormsPreTrans],
 	[io:format(erl_prettypr:format(F) ++ "\n") || F <- NewForms],
 	NewForms.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% PRE transformation
+% Tranform code
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-transform_pres([], _, Acc) -> 
+transform([], _, Acc) -> 
 	lists:reverse(Acc);
-transform_pres([Form | Forms], ToRemove, Acc) -> 
+transform([Form | Forms], ToRemove, Acc) -> 
 	case erl_syntax:type(Form) of 
 		function -> 
-			% io:format(
-			% 	"ENTER FUN: ~p\n", 
-			% 	[{	erl_syntax:atom_value(erl_syntax:function_name(Form)), 
-			% 	  	erl_syntax:function_arity(Form)}]),
 			case 
 				{
 					erl_syntax:atom_value(erl_syntax:function_name(Form)), 
@@ -46,43 +42,46 @@ transform_pres([Form | Forms], ToRemove, Acc) ->
 				} 
 			of 
 				{pre, 0} -> 
-					% io:format("ENTER PRE\n"),
-					NextFun = 
-						hd(Forms),
-					NewForms = 
-						tl(Forms),
-					OpPreFun = 
-						erl_syntax:implicit_fun_name(
-							hd(erl_syntax:clause_body(
-								hd(erl_syntax:function_clauses(Form))))),
-					NamePreFun = 
-						erl_syntax:atom_value(
-							erl_syntax:arity_qualifier_body(OpPreFun)),
-					ArityPreFun = 
-						erl_syntax:integer_value(
-							erl_syntax:arity_qualifier_argument(OpPreFun)),
+					[NextFun | NewForms] = 
+						Forms,
 					{NewFunction, NextFunFresh, RemovedFun} = 
-						transform_pres_function(
+						transform_pre_function(
 							NextFun, 
-							{NamePreFun, ArityPreFun}, 
+							extract_pre_post_fun(Form), 
 							Acc ++ NewForms ++ ToRemove),
-					transform_pres(
+					transform(
 						NewForms, 
 						[RemovedFun | ToRemove], 
 						[NextFunFresh, NewFunction | Acc] -- [RemovedFun]);
+				{post, 0} -> 
+					[OriginalFun, EntryFun | NewAcc] = 
+						Acc,
+					{NewEntryFun, RemovedFun} = 
+						transform_post_function(
+							EntryFun, 
+							extract_pre_post_fun(Form), 
+							Acc ++ Forms ++ ToRemove),
+					transform(
+						Forms, 
+						[RemovedFun | ToRemove], 
+						[OriginalFun, NewEntryFun | NewAcc] -- [RemovedFun]);
 				_ -> 
 					case lists:member(Form, ToRemove) of 
 						true -> 
-							transform_pres(Forms, ToRemove, Acc);
+							transform(Forms, ToRemove, Acc);
 						false -> 
-							transform_pres(Forms, ToRemove, [Form | Acc])
+							transform(Forms, ToRemove, [Form | Acc])
 					end
 			end;
 		_ -> 
-			transform_pres(Forms, ToRemove, [Form | Acc])
+			transform(Forms, ToRemove, [Form | Acc])
 	end.
 
-transform_pres_function(Form, {NamePreFun, ArityPreFun}, OtherForms) ->
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% PRE transformation
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+transform_pre_function(Form, {NamePreFun, ArityPreFun}, OtherForms) ->
 	FormName = 
 		erl_syntax:function_name(Form),
 	NewId = 
@@ -100,7 +99,6 @@ transform_pres_function(Form, {NamePreFun, ArityPreFun}, OtherForms) ->
 		|| 	Order <- lists:seq(1, erl_syntax:function_arity(NForm))],
 	ParamVars = 
 		element(2, lists:unzip(ParamOrderVars)),
-	io:format("ParamVars: ~p\n", [ParamVars]),
 	NewBodyFormPreFun = 
 		replace_params(
 			ParamOrderVars, 
@@ -132,8 +130,77 @@ transform_pres_function(Form, {NamePreFun, ArityPreFun}, OtherForms) ->
 	{InForm, NForm, FormPreFun}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% POST transformation
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+transform_post_function(EntryForm, {NamePreFun, ArityPreFun}, OtherForms) ->
+	FormPostFun = 
+		search_fun({NamePreFun, ArityPreFun}, OtherForms),
+	VarResult = 
+		get_free_variable(),
+	Parameters = 
+		erl_syntax:clause_patterns(
+			hd(erl_syntax:function_clauses(EntryForm))),
+	ParamOrderVars = 
+		lists:zip(lists:seq(1, length(Parameters)),Parameters),
+	NewBodyFormPostFun = 
+		replace_result(
+			VarResult,
+			replace_params(
+				ParamOrderVars, 
+				erl_syntax:clause_body(
+					hd(erl_syntax:function_clauses(FormPostFun))))),
+	CaseExpr = 
+		hd(erl_syntax:clause_body(
+				hd(erl_syntax:function_clauses(EntryForm)))),
+	[TrueClause, FalseClause] = 
+		erl_syntax:case_expr_clauses(CaseExpr),
+	TrueClauseCall = 
+		hd(erl_syntax:clause_body(TrueClause)),
+	ErrorExp = 
+		erl_syntax:application(
+			erl_syntax:module_qualifier(
+				erl_syntax:atom(erlang),
+				erl_syntax:atom(error)),
+			[erl_syntax:string("The post-condition is not hold")]),
+	NewTrueClauseBody = 
+		[
+			erl_syntax:match_expr(VarResult, TrueClauseCall),
+			erl_syntax:case_expr(
+				erl_syntax:block_expr(NewBodyFormPostFun),
+				[erl_syntax:clause([erl_syntax:atom(true)], none, [VarResult]),
+				 erl_syntax:clause([erl_syntax:atom(false)], none, [ErrorExp])])		
+		],
+	NewBody = 
+		erl_syntax:case_expr(
+			erl_syntax:case_expr_argument(CaseExpr),
+			[erl_syntax:clause([erl_syntax:atom(true)], none, NewTrueClauseBody),
+			 FalseClause]),	
+	NewEntryForm = 
+		erl_syntax:function(
+			erl_syntax:function_name(EntryForm),
+			[erl_syntax:clause(
+				Parameters,
+				none,
+				[NewBody])]),
+	{NewEntryForm, FormPostFun}.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Common Functions
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+extract_pre_post_fun(Form) -> 
+	OpPreFun = 
+		erl_syntax:implicit_fun_name(
+			hd(erl_syntax:clause_body(
+				hd(erl_syntax:function_clauses(Form))))),
+	NamePreFun = 
+		erl_syntax:atom_value(
+			erl_syntax:arity_qualifier_body(OpPreFun)),
+	ArityPreFun = 
+		erl_syntax:integer_value(
+			erl_syntax:arity_qualifier_argument(OpPreFun)),
+	{NamePreFun, ArityPreFun}.
 
 replace_params(DictParams, Es) -> 
 	lists:map(
@@ -166,6 +233,33 @@ replace_params(DictParams, Es) ->
 		end,
 		Es).
 	
+replace_result(VarRes, Es) -> 
+	lists:map(
+		fun(E) -> 
+			erl_syntax_lib:map(
+				fun(N) -> 
+					case erl_syntax:type(N) of 
+						application -> 
+							Op = 
+								erl_syntax:application_operator(N),
+							case erl_syntax:type(Op) of 
+								atom -> 
+									case erl_syntax:atom_value(Op) of 
+										r ->
+											VarRes;
+										_ -> 
+											N
+									end;
+								_ -> 
+									N
+							end;
+						_ -> 
+							N 
+					end
+				end,
+				E)
+		end,
+		Es).
 
 search_fun({Name, Arity}, Forms) -> 
 	try
@@ -215,17 +309,15 @@ annotate_bindings_form(_, Form)->
 		ordsets:new()).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Variables send
+% Variables sending
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 send_vars(Form) ->
-	io:format("Form: ~p\n", [Form]),
 	erl_syntax_lib:map(
 		fun send_vars_node/1,
 		Form).
 
 send_vars_node(Node) ->
-	io:format("Node: ~p\n", [Node]),
 	case erl_syntax:type(Node) of 
 		variable -> 
 			edbc_free_vars_server!
