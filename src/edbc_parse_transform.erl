@@ -18,7 +18,7 @@ parse_transform(Forms, _Options) ->
 	lists:map(
 		fun send_vars/1,
 		FormsAnnBindings),
-	dbg_free_vars_server!all_variables_added,
+	edbc_free_vars_server!all_variables_added,
 	FormsPreTrans = 
 		transform_pres(FormsAnnBindings ,[], []),
 	NewForms = 
@@ -219,15 +219,16 @@ annotate_bindings_form(_, Form)->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 send_vars(Form) ->
+	io:format("Form: ~p\n", [Form]),
 	erl_syntax_lib:map(
 		fun send_vars_node/1,
-		Form),
-	Form.
+		Form).
 
 send_vars_node(Node) ->
+	io:format("Node: ~p\n", [Node]),
 	case erl_syntax:type(Node) of 
 		variable -> 
-			dbg_free_vars_server!
+			edbc_free_vars_server!
 				{
 					add_variable, 
 					erl_syntax:variable_literal(Node)
@@ -241,22 +242,22 @@ send_vars_node(Node) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 unregister_servers() ->
-	catch unregister(ebdc_free_vars_server).
+	catch unregister(edbc_free_vars_server).
 
 register_servers() ->
 	register(
-		ebdc_free_vars_server, 
-		spawn(ebdc_free_vars_server, init, [])).
+		edbc_free_vars_server, 
+		spawn(edbc_free_vars_server, init, [])).
 
 get_free_variable() ->
-	ebdc_free_vars_server ! {get_free_variable, self()},
+	edbc_free_vars_server ! {get_free_variable, self()},
 	receive 
 		Value ->
 			Value
 	end.
 
 get_free_id(Atom) ->
-	ebdc_free_vars_server ! {get_free_id, Atom, self()},
+	edbc_free_vars_server ! {get_free_id, Atom, self()},
 	receive 
 		Value ->
 			Value

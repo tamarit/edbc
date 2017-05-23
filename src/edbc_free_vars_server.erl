@@ -1,4 +1,4 @@
--module(ebdc_free_vars_server). 
+-module(edbc_free_vars_server). 
 
 -export([init/0]).
 
