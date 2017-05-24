@@ -19,11 +19,14 @@ parse_transform(Forms, _Options) ->
 		fun send_vars/1,
 		FormsAnnBindings),
 	edbc_free_vars_server!all_variables_added,
-	FormsPreTrans = 
+	FormsPreTrans0 = 
 		transform(FormsAnnBindings ,[], []),
+	% remove pre atoms between forms
+	FormsPreTrans = 
+		[F || F<- FormsPreTrans0, F /= pre],
 	NewForms = 
 		[erl_syntax:revert(IF) || IF <- FormsPreTrans],
-	[io:format(erl_prettypr:format(F) ++ "\n") || F <- NewForms],
+	% [io:format(erl_prettypr:format(F) ++ "\n") || F <- NewForms],
 	NewForms.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -44,27 +47,37 @@ transform([Form | Forms], ToRemove, Acc) ->
 				{pre, 0} -> 
 					[NextFun | NewForms] = 
 						Forms,
-					{NewFunction, NextFunFresh, RemovedFun} = 
+					{NewFunction, NextFunFresh, RemovedFuns} = 
 						transform_pre_function(
 							NextFun, 
 							extract_pre_post_fun(Form), 
 							Acc ++ NewForms ++ ToRemove),
 					transform(
 						NewForms, 
-						[RemovedFun | ToRemove], 
-						[NextFunFresh, NewFunction | Acc] -- [RemovedFun]);
-				{post, 0} -> 
-					[OriginalFun, EntryFun | NewAcc] = 
-						Acc,
-					{NewEntryFun, RemovedFun} = 
+						RemovedFuns ++ ToRemove, 
+						[NextFunFresh, pre, NewFunction | Acc] -- RemovedFuns);
+				{post, 0} ->
+					{OriginalFun, EntryFun, NewAcc} = 
+						case Acc of 
+							[OriginalFun0, pre, EntryFun0 | NewAcc0] -> 
+								{OriginalFun0, EntryFun0, NewAcc0};
+							[OriginalFun0 | NewAcc0] ->
+								{NewFunction, NextFunFresh, []} = 
+									transform_pre_function(
+										OriginalFun0, 
+										[erl_syntax:atom(true)], 
+										[]),
+								{NextFunFresh, NewFunction, NewAcc0}
+						end,
+					{NewEntryFun, RemovedFuns} = 
 						transform_post_function(
 							EntryFun, 
 							extract_pre_post_fun(Form), 
 							Acc ++ Forms ++ ToRemove),
 					transform(
 						Forms, 
-						[RemovedFun | ToRemove], 
-						[OriginalFun, NewEntryFun | NewAcc] -- [RemovedFun]);
+						RemovedFuns ++ ToRemove,  
+						[OriginalFun, NewEntryFun | NewAcc] -- RemovedFuns);
 				_ -> 
 					case lists:member(Form, ToRemove) of 
 						true -> 
@@ -77,11 +90,63 @@ transform([Form | Forms], ToRemove, Acc) ->
 			transform(Forms, ToRemove, [Form | Acc])
 	end.
 
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% % PRE_I transformation
+% %%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% transform_internal_pre_function(Form, {NamePreFun, ArityPreFun}, OtherForms) ->
+% 	FormName = 
+% 		erl_syntax:function_name(Form),
+% 	NewId = 
+% 		get_free_id( 
+% 			erl_syntax:atom_value(
+% 				FormName)),
+% 	NForm = 
+% 		erl_syntax:function(
+% 			NewId, 
+% 			erl_syntax:function_clauses(Form)),
+% 	FormPreFun = 
+% 		search_fun({NamePreFun, ArityPreFun}, OtherForms),
+% 	ParamOrderVars = 
+% 		[ 	{Order, get_free_variable()} 
+% 		|| 	Order <- lists:seq(1, erl_syntax:function_arity(NForm))],
+% 	ParamVars = 
+% 		element(2, lists:unzip(ParamOrderVars)),
+% 	NewBodyFormPreFun = 
+% 		replace_params(
+% 			ParamOrderVars, 
+% 			erl_syntax:clause_body(
+% 				hd(erl_syntax:function_clauses(FormPreFun)))),
+% 	ErrorExp = 
+% 		erl_syntax:application(
+% 			erl_syntax:module_qualifier(
+% 				erl_syntax:atom(erlang),
+% 				erl_syntax:atom(error)),
+% 			[erl_syntax:string("The pre-condition is not hold")]),
+% 	CallToFun = 
+% 		erl_syntax:application(
+% 			NewId,
+% 			ParamVars),
+% 	BodyInForm = 
+% 		% hd(ParamVars),
+% 		erl_syntax:case_expr(
+% 			erl_syntax:block_expr(NewBodyFormPreFun),
+% 			[erl_syntax:clause([erl_syntax:atom(true)], none, [CallToFun]),
+% 			 erl_syntax:clause([erl_syntax:atom(false)], none, [ErrorExp])]),
+% 	InForm = 
+% 		erl_syntax:function(
+% 			FormName,
+% 			[erl_syntax:clause(
+% 				ParamVars,
+% 				none,
+% 				[BodyInForm])]),
+% 	{InForm, NForm, FormPreFun}.
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % PRE transformation
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-transform_pre_function(Form, {NamePreFun, ArityPreFun}, OtherForms) ->
+transform_pre_function(Form, FunOrBody, OtherForms) ->
 	FormName = 
 		erl_syntax:function_name(Form),
 	NewId = 
@@ -92,18 +157,25 @@ transform_pre_function(Form, {NamePreFun, ArityPreFun}, OtherForms) ->
 		erl_syntax:function(
 			NewId, 
 			erl_syntax:function_clauses(Form)),
-	FormPreFun = 
-		search_fun({NamePreFun, ArityPreFun}, OtherForms),
 	ParamOrderVars = 
 		[ 	{Order, get_free_variable()} 
 		|| 	Order <- lists:seq(1, erl_syntax:function_arity(NForm))],
 	ParamVars = 
 		element(2, lists:unzip(ParamOrderVars)),
-	NewBodyFormPreFun = 
-		replace_params(
-			ParamOrderVars, 
-			erl_syntax:clause_body(
-				hd(erl_syntax:function_clauses(FormPreFun)))),
+	{FormPreFun, NewBodyFormPreFun} = 
+		case FunOrBody of 
+			{NamePreFun, ArityPreFun} -> 
+				FormPreFun0 = 
+					search_fun({NamePreFun, ArityPreFun}, OtherForms),
+				NewBodyFormPreFun0 = 
+					replace_params(
+						ParamOrderVars, 
+						erl_syntax:clause_body(
+							hd(erl_syntax:function_clauses(FormPreFun0)))),
+				{[FormPreFun0], NewBodyFormPreFun0};
+			Body -> 
+				{[], Body}
+		end,
 	ErrorExp = 
 		erl_syntax:application(
 			erl_syntax:module_qualifier(
@@ -183,7 +255,7 @@ transform_post_function(EntryForm, {NamePreFun, ArityPreFun}, OtherForms) ->
 				Parameters,
 				none,
 				[NewBody])]),
-	{NewEntryForm, FormPostFun}.
+	{NewEntryForm, [FormPostFun]}.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Common Functions
@@ -265,7 +337,7 @@ search_fun({Name, Arity}, Forms) ->
 	try
 		lists:foldl(
 			fun
-				(Form, not_found) ->
+				(Form, not_found) when Form /= pre ->
 					case erl_syntax:type(Form) of 
 						function -> 
 							case 
@@ -283,7 +355,7 @@ search_fun({Name, Arity}, Forms) ->
 						_ -> 
 							not_found
 					end;
-				% Not really needed because the throw expression when it is found
+				% Not really needed because there is a throw expression when it is found
 				(_, _) -> 
 					not_found
 			end,		
@@ -309,7 +381,7 @@ annotate_bindings_form(_, Form)->
 		ordsets:new()).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Variables sending
+% Free ariables managment
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 send_vars(Form) ->
@@ -328,10 +400,6 @@ send_vars_node(Node) ->
 		_ -> 
 			ok
 	end.
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Other functions
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 unregister_servers() ->
 	catch unregister(edbc_free_vars_server).
