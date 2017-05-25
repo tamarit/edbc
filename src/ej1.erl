@@ -7,7 +7,10 @@
 f(0) -> 1;
 f(N) -> 
     Prev = f(N-1),
-	% ?PRE_I(fun pre_f_i/1, [N]),
+    % Bound variables are sent
+	% ?PRE_I(fun pre_f_i/0),
+    % Bound variables are not sent (for reusable contracts)
+    % ?PRE_I(fun pre_f_i/2. [Prev, N ]),
 	Prev * 3.
 ?POST(fun post_f/0).
 
@@ -22,7 +25,6 @@ i(Elem, List) ->
     [Elem,1 | List].
 ?POST(fun post_i/0).
 
--none(1).
 pre_f() -> 
 	?P(1) >= 0.
 
@@ -43,6 +45,6 @@ pre_h() ->
 post_i() -> 
     (length(?P(2)) + 1) == length(?R()).
 
-% pre_f_i(N) -> 
+% pre_f_i() -> 
 %     Prev > N,
 %     true.

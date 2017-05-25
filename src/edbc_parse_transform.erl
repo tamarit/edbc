@@ -6,21 +6,37 @@
 % parse_transform
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-parse_transform(Forms, _Options) ->
+parse_transform(Forms, Options) ->
+	% io:format("Options: ~p\n", [Options]),
+	% case lists:member({d, edbc}, Options) of 
+	% 	true -> 
+	% 		io:format("EBDC ON\n");
+	% 	false -> 
+	% 		io:format("EBDC OFF\n")
+	% end,
 	% io:format("~p\n", [Forms]),
-	unregister_servers(),
-    register_servers(),
-    FormsAnnBindings = 
-		lists:map(
-			fun annotate_bindings_form/1,
-			Forms),
-	% Send all variable names
-	lists:map(
-		fun send_vars/1,
-		FormsAnnBindings),
-	edbc_free_vars_server!all_variables_added,
+	EDBC_ON = 
+		lists:member({d, edbc}, Options),
+	FormsAnnBindings = 
+		case EDBC_ON of 
+			true -> 
+				Forms;
+			false -> 
+				unregister_servers(),
+			    register_servers(),
+			    FormsAnnBindings0 = 
+					lists:map(
+						fun annotate_bindings_form/1,
+						Forms),
+				% Send all variable names
+				lists:map(
+					fun send_vars/1,
+					FormsAnnBindings0),
+				edbc_free_vars_server!all_variables_added,
+				FormsAnnBindings0
+		end,
 	FormsPreTrans0 = 
-		transform(FormsAnnBindings ,[], []),
+		transform(FormsAnnBindings ,[], [], EDBC_ON),
 	% remove pre atoms between forms
 	FormsPreTrans = 
 		[F || F<- FormsPreTrans0, F /= pre],
@@ -33,9 +49,9 @@ parse_transform(Forms, _Options) ->
 % Tranform code
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-transform([], _, Acc) -> 
+transform([], _, Acc, _) -> 
 	lists:reverse(Acc);
-transform([Form | Forms], ToRemove, Acc) -> 
+transform([Form | Forms], ToRemove, Acc, EDBC_ON) -> 
 	case erl_syntax:type(Form) of 
 		function -> 
 			case 
@@ -45,49 +61,77 @@ transform([Form | Forms], ToRemove, Acc) ->
 				} 
 			of 
 				{pre, 0} -> 
-					[NextFun | NewForms] = 
-						Forms,
-					{NewFunction, NextFunFresh, RemovedFuns} = 
-						transform_pre_function(
-							NextFun, 
-							extract_pre_post_fun(Form), 
-							Acc ++ NewForms ++ ToRemove),
-					transform(
-						NewForms, 
-						RemovedFuns ++ ToRemove, 
-						[NextFunFresh, pre, NewFunction | Acc] -- RemovedFuns);
+					case EDBC_ON of 
+						true -> 
+							[NextFun | NewForms] = 
+								Forms,
+							{NewFunction, NextFunFresh, RemovedFuns} = 
+								transform_pre_function(
+									NextFun, 
+									extract_pre_post_fun(Form), 
+									Acc ++ NewForms ++ ToRemove),
+							transform(
+								NewForms, 
+								RemovedFuns ++ ToRemove, 
+								[NextFunFresh, pre, NewFunction | Acc] -- RemovedFuns,
+								EDBC_ON);
+						false -> 
+							RemovedFuns = 
+								[search_fun(
+									extract_pre_post_fun(Form),  
+									Acc ++ Forms ++ ToRemove)],
+							transform(
+								Forms, 
+								RemovedFuns ++ ToRemove, 
+								Acc -- RemovedFuns,
+								EDBC_ON)
+					end;
 				{post, 0} ->
-					{OriginalFun, EntryFun, NewAcc} = 
-						case Acc of 
-							[OriginalFun0, pre, EntryFun0 | NewAcc0] -> 
-								{OriginalFun0, EntryFun0, NewAcc0};
-							[OriginalFun0 | NewAcc0] ->
-								{NewFunction, NextFunFresh, []} = 
-									transform_pre_function(
-										OriginalFun0, 
-										[erl_syntax:atom(true)], 
-										[]),
-								{NextFunFresh, NewFunction, NewAcc0}
-						end,
-					{NewEntryFun, RemovedFuns} = 
-						transform_post_function(
-							EntryFun, 
-							extract_pre_post_fun(Form), 
-							Acc ++ Forms ++ ToRemove),
-					transform(
-						Forms, 
-						RemovedFuns ++ ToRemove,  
-						[OriginalFun, NewEntryFun | NewAcc] -- RemovedFuns);
+					case EDBC_ON of 
+						true -> 
+							{OriginalFun, EntryFun, NewAcc} = 
+								case Acc of 
+									[OriginalFun0, pre, EntryFun0 | NewAcc0] -> 
+										{OriginalFun0, EntryFun0, NewAcc0};
+									[OriginalFun0 | NewAcc0] ->
+										{NewFunction, NextFunFresh, []} = 
+											transform_pre_function(
+												OriginalFun0, 
+												[erl_syntax:atom(true)], 
+												[]),
+										{NextFunFresh, NewFunction, NewAcc0}
+								end,
+							{NewEntryFun, RemovedFuns} = 
+								transform_post_function(
+									EntryFun, 
+									extract_pre_post_fun(Form), 
+									Acc ++ Forms ++ ToRemove),
+							transform(
+								Forms, 
+								RemovedFuns ++ ToRemove,  
+								[OriginalFun, NewEntryFun | NewAcc] -- RemovedFuns,
+								EDBC_ON);
+						false -> 
+							RemovedFuns = 
+								[search_fun(
+									extract_pre_post_fun(Form),  
+									Acc ++ Forms ++ ToRemove)],
+							transform(
+								Forms, 
+								RemovedFuns ++ ToRemove, 
+								Acc -- RemovedFuns,
+								EDBC_ON)
+					end;
 				_ -> 
 					case lists:member(Form, ToRemove) of 
 						true -> 
-							transform(Forms, ToRemove, Acc);
+							transform(Forms, ToRemove, Acc, EDBC_ON);
 						false -> 
-							transform(Forms, ToRemove, [Form | Acc])
+							transform(Forms, ToRemove, [Form | Acc], EDBC_ON)
 					end
 			end;
 		_ -> 
-			transform(Forms, ToRemove, [Form | Acc])
+			transform(Forms, ToRemove, [Form | Acc], EDBC_ON)
 	end.
 
 % %%%%%%%%%%%%%%%%%%%%%%%%%%%%
