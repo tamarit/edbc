@@ -20,6 +20,7 @@ stop() -> gen_server:stop(?MODULE).
 init([]) ->
 	Library = dict:new(),
 	{ok, Library}.
+	% {ok, []}.
 
 
 % handle_call is invoked in response to gen_server:call
@@ -50,13 +51,17 @@ handle_call({return, Book}, _From, Library) ->
 
 handle_call(_Message, _From, Library) ->
 	{reply, error, Library}.
-?POST(fun post_handle_call/0).
+% ?POST(fun post_handle_call/0).
 
 % We get compile warnings from gen_server unless we define these
-handle_cast(_Message, Library) -> {noreply, Library}.
-handle_info(_Message, Library) -> {noreply, Library}.
-terminate(_Reason, _Library) -> ok.
-code_change(_OldVersion, Library, _Extra) -> {ok, Library}.
+handle_cast(_Message, Library) -> 
+	{noreply, Library}.
+handle_info(_Message, Library) -> 
+	{noreply, Library}.
+terminate(_Reason, _Library) -> 
+	ok.
+code_change(_OldVersion, Library, _Extra) -> 
+	{ok, Library}.
 
 
 % Added functions
@@ -64,5 +69,10 @@ code_change(_OldVersion, Library, _Extra) -> {ok, Library}.
 is_dict(DictCand) ->
   is_tuple(DictCand) andalso element(1, DictCand) =:= dict.
 
-post_handle_call() -> 
-	is_dict(element(3,?R())).
+% post_handle_call() -> 
+% 	is_dict(element(3, ?R)).
+
+?INVARIANT(fun invariant/1).
+
+invariant(State) -> 
+	is_dict(State).

@@ -66,13 +66,8 @@ loop(State) ->
 				++ 	integer_to_list(CurrentId), 
 			Pid ! erl_syntax:atom(FreeID),
 			loop(NewState);
-		Other ->
-			erlang:exit(
-				self(), 
-				{
-					error, 
-					{"Title: Error option.~n", Other}
-				})
+		_Other ->
+			loop(State)
 	end.
 
 get_max_length_variable(Variable, Max) 
