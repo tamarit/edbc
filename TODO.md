@@ -14,4 +14,5 @@
 - Is it needed the old state in the invariant function
 - liquid types
 - liquid session types
-- plantear poner restricciones para poder leer un mensaje o no leerlo, i.e. como una CPRE
+- use some kind of guard that allows to read or not read a message in a gen_server, i.e. as a CPRE
+- POST condition that check that the function does not take more than a given time to execute
