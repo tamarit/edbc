@@ -1,2 +1,6 @@
 
 *.beam
+
+*.dump
+
+src/output

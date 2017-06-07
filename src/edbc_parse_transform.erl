@@ -46,7 +46,7 @@ parse_transform(Forms, Options) ->
 		[F || F<- FormsPreTrans1, F /= pre],
 	NewForms = 
 		[erl_syntax:revert(IF) || IF <- FormsPreTrans],
-	[io:format(erl_prettypr:format(F) ++ "\n") || F <- NewForms],
+	% [io:format(erl_prettypr:format(F) ++ "\n") || F <- NewForms],
 	% [io:format("~p\n", [F]) || F <- NewForms, erl_syntax:type(F) == function, erl_syntax:atom_value(erl_syntax:function_name(F)) == post_invariant],
 	NewForms.
 

@@ -14,3 +14,4 @@
 - Is it needed the old state in the invariant function
 - liquid types
 - liquid session types
+- plantear poner restricciones para poder leer un mensaje o no leerlo, i.e. como una CPRE
