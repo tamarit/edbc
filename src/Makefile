@@ -6,4 +6,6 @@
 run1:
 	@erl -run bridge_test test  -noshell -s erlang halt
 
+run2:
+	@erl -run bridge_fair_test test  -noshell -s erlang halt
 

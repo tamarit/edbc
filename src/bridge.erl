@@ -5,6 +5,8 @@
 
 -include_lib("edbc.hrl").
 
+-define(THRESHOLD(Total), Total div 5).
+
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
 
 -export([start/1, request_enter/1, warn_exit/0, stop/0]).
@@ -16,7 +18,7 @@ request_enter(EntryPoint) ->
 	gen_server:call(?MODULE, {request_enter, EntryPoint}).	
 warn_exit() -> 
 	% io:format("LLEGA\n"),
-	% gen_server:cast(?MODULE, warn_exit).
+	% gen_server:call(?MODULE, warn_exit).
 	gen_server:cast(?MODULE, warn_exit).
 stop() -> 
 	gen_server:stop(?MODULE).
@@ -29,8 +31,9 @@ invariant({Passing, Waiting, Total}) ->
 		is_integer(Total)
 	andalso
 		is_list(Waiting)
-	andalso
-		length(Waiting) < (Total / 5).
+	% andalso
+	% 	length(Waiting) =< ?THRESHOLD(Total)
+	.
 
 % This is called when a connection is made to the server
 init([Total]) ->
