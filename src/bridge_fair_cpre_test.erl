@@ -8,13 +8,13 @@ test() ->
 	% io:format("OutputCompile: ~p\n", [OutputCompile]),
 	start(),
 	% timer:sleep(10000),
-	bridge_fair:stop().
+	bridge_fair_cpre:stop().
 
 
 start() -> 
 	Total = 
 		100,
-	bridge_fair:start(Total),
+	bridge_fair_cpre:start(Total),
 	Pids = create_cars(Total),
 	[Pid!start || Pid <- Pids],
 	[
@@ -57,7 +57,7 @@ car(Id, EntryPoint) ->
 car_loop(Id, EntryPoint) ->
 	% io:format("Car ~p entering from ~p\n", [Id, EntryPoint]), 
 	Answer = 
-		bridge_fair:request_enter(EntryPoint),
+		bridge_fair_cpre:request_enter(EntryPoint),
 	case Answer of 
 		wait ->
 			% io:format("Car ~p wait for entering from ~p\n", [Id, EntryPoint]),
@@ -65,7 +65,7 @@ car_loop(Id, EntryPoint) ->
 			car_loop(Id, EntryPoint);
 		pass -> 
 			timer:sleep(100),
-			bridge_fair:warn_exit(),
+			bridge_fair_cpre:warn_exit(),
 			io:format("Car ~p passed entering from ~p\n", [Id, EntryPoint]),
 			% car_loop(Id, EntryPoint)
 			get(parent)!finished

@@ -169,16 +169,16 @@
 %%%          {error, Reason}
 %%% -----------------------------------------------------------------
 start(Mod, Args, Options) ->
-    gen:start(?MODULE, nolink, Mod, Args, Options).
+    gen_mod:start(?MODULE, nolink, Mod, Args, Options).
 
 start(Name, Mod, Args, Options) ->
-    gen:start(?MODULE, nolink, Name, Mod, Args, Options).
+    gen_mod:start(?MODULE, nolink, Name, Mod, Args, Options).
 
 start_link(Mod, Args, Options) ->
-    gen:start(?MODULE, link, Mod, Args, Options).
+    gen_mod:start(?MODULE, link, Mod, Args, Options).
 
 start_link(Name, Mod, Args, Options) ->
-    gen:start(?MODULE, link, Name, Mod, Args, Options).
+    gen_mod:start(?MODULE, link, Name, Mod, Args, Options).
 
 
 %% -----------------------------------------------------------------
@@ -187,10 +187,10 @@ start_link(Name, Mod, Args, Options) ->
 %% be monitored.
 %% -----------------------------------------------------------------
 stop(Name) ->
-    gen:stop(Name).
+    gen_mod:stop(Name).
 
 stop(Name, Reason, Timeout) ->
-    gen:stop(Name, Reason, Timeout).
+    gen_mod:stop(Name, Reason, Timeout).
 
 %% -----------------------------------------------------------------
 %% Make a call to a generic server.
@@ -200,7 +200,7 @@ stop(Name, Reason, Timeout) ->
 %% is handled here (? Shall we do that here (or rely on timeouts) ?).
 %% ----------------------------------------------------------------- 
 call(Name, Request) ->
-    case catch gen:call(Name, '$gen_call', Request) of
+    case catch gen_mod:call(Name, '$gen_call', Request) of
 	{ok,Res} ->
 	    Res;
 	{'EXIT',Reason} ->
@@ -208,7 +208,7 @@ call(Name, Request) ->
     end.
 
 call(Name, Request, Timeout) ->
-    case catch gen:call(Name, '$gen_call', Request, Timeout) of
+    case catch gen_mod:call(Name, '$gen_call', Request, Timeout) of
 	{ok,Res} ->
 	    Res;
 	{'EXIT',Reason} ->
@@ -307,10 +307,10 @@ enter_loop(Mod, Options, State, Timeout) ->
     enter_loop(Mod, Options, State, self(), Timeout).
 
 enter_loop(Mod, Options, State, ServerName, Timeout) ->
-    Name = gen:get_proc_name(ServerName),
-    Parent = gen:get_parent(),
-    Debug = gen:debug_options(Name, Options),
-	HibernateAfterTimeout = gen:hibernate_after(Options),
+    Name = gen_mod:get_proc_name(ServerName),
+    Parent = gen_mod:get_parent(),
+    Debug = gen_mod:debug_options(Name, Options),
+	HibernateAfterTimeout = gen_mod:hibernate_after(Options),
     loop(Parent, Name, State, Mod, Timeout, HibernateAfterTimeout, Debug).
 
 %%%========================================================================
@@ -327,16 +327,16 @@ enter_loop(Mod, Options, State, ServerName, Timeout) ->
 init_it(Starter, self, Name, Mod, Args, Options) ->
     init_it(Starter, self(), Name, Mod, Args, Options);
 init_it(Starter, Parent, Name0, Mod, Args, Options) ->
-    Name = gen:name(Name0),
-    Debug = gen:debug_options(Name, Options),
-    HibernateAfterTimeout = gen:hibernate_after(Options),
+    Name = gen_mod:name(Name0),
+    Debug = gen_mod:debug_options(Name, Options),
+    HibernateAfterTimeout = gen_mod:hibernate_after(Options),
 
     case init_it(Mod, Args) of
 	{ok, {ok, State}} ->
-	    proc_lib:init_ack(Starter, {ok, self()}), 	    
+	    proc_lib_mod:init_ack(Starter, {ok, self()}), 	    
 	    loop(Parent, Name, State, Mod, infinity, HibernateAfterTimeout, Debug);
 	{ok, {ok, State, Timeout}} ->
-	    proc_lib:init_ack(Starter, {ok, self()}), 	    
+	    proc_lib_mod:init_ack(Starter, {ok, self()}), 	    
 	    loop(Parent, Name, State, Mod, Timeout, HibernateAfterTimeout, Debug);
 	{ok, {stop, Reason}} ->
 	    %% For consistency, we must make sure that the
@@ -345,20 +345,20 @@ init_it(Starter, Parent, Name0, Mod, Args, Options) ->
 	    %% (Otherwise, the parent process could get
 	    %% an 'already_started' error if it immediately
 	    %% tried starting the process again.)
-	    gen:unregister_name(Name0),
-	    proc_lib:init_ack(Starter, {error, Reason}),
+	    gen_mod:unregister_name(Name0),
+	    proc_lib_mod:init_ack(Starter, {error, Reason}),
 	    exit(Reason);
 	{ok, ignore} ->
-	    gen:unregister_name(Name0),
-	    proc_lib:init_ack(Starter, ignore),
+	    gen_mod:unregister_name(Name0),
+	    proc_lib_mod:init_ack(Starter, ignore),
 	    exit(normal);
 	{ok, Else} ->
 	    Error = {bad_return_value, Else},
-	    proc_lib:init_ack(Starter, {error, Error}),
+	    proc_lib_mod:init_ack(Starter, {error, Error}),
 	    exit(Error);
 	{'EXIT', Class, Reason, Stacktrace} ->
-	    gen:unregister_name(Name0),
-	    proc_lib:init_ack(Starter, {error, terminate_reason(Class, Reason, Stacktrace)}),
+	    gen_mod:unregister_name(Name0),
+	    proc_lib_mod:init_ack(Starter, {error, terminate_reason(Class, Reason, Stacktrace)}),
 	    erlang:raise(Class, Reason, Stacktrace)
     end.
 init_it(Mod, Args) ->
@@ -376,7 +376,7 @@ init_it(Mod, Args) ->
 %%% The MAIN loop.
 %%% ---------------------------------------------------
 loop(Parent, Name, State, Mod, hibernate, HibernateAfterTimeout, Debug) ->
-    proc_lib:hibernate(?MODULE,wake_hib,[Parent, Name, State, Mod, HibernateAfterTimeout, Debug]);
+    proc_lib_mod:hibernate(?MODULE,wake_hib,[Parent, Name, State, Mod, HibernateAfterTimeout, Debug]);
 
 loop(Parent, Name, State, Mod, infinity, HibernateAfterTimeout, Debug) ->
 	receive
@@ -686,7 +686,8 @@ handle_msg({'$gen_call', From, Msg}, Parent, Name, State, Mod, HibernateAfterTim
 				Other -> handle_common_reply(Other, Parent, Name, From, Msg, Mod, HibernateAfterTimeout, State)
 		    end;
 		false -> 
-			self() ! {'$gen_call', From, Msg}
+			self() ! {'$gen_call', From, Msg},
+			loop(Parent, Name, State, Mod, infinity, HibernateAfterTimeout, [])
 	end;
 handle_msg(Msg, Parent, Name, State, Mod, HibernateAfterTimeout) ->
     Reply = try_dispatch(Msg, Mod, State),
@@ -919,7 +920,7 @@ client_stacktrace(From) when is_pid(From) ->
 %%-----------------------------------------------------------------
 format_status(Opt, StatusData) ->
     [PDict, SysState, Parent, Debug, [Name, State, Mod, _Time, _HibernateAfterTimeout]] = StatusData,
-    Header = gen:format_status_header("Status for generic server", Name),
+    Header = gen_mod:format_status_header("Status for generic server", Name),
     Log = sys:get_debug(log, Debug, []),
     Specfic = case format_status(Opt, Mod, PDict, State) of
 		  S when is_list(S) -> S;

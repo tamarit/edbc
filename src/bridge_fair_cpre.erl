@@ -13,15 +13,15 @@
 
 % These are all wrappers for calls to the server
 start(Total) ->
-	gen_server:start_link({local, ?MODULE}, ?MODULE, [Total], []).
+	gen_server_cpre:start_link({local, ?MODULE}, ?MODULE, [Total], []).
 request_enter(EntryPoint) -> 
-	gen_server:call(?MODULE, {request_enter, EntryPoint}).	
+	gen_server_cpre:call(?MODULE, {request_enter, EntryPoint}).	
 warn_exit() -> 
 	% io:format("LLEGA\n"),
 	% gen_server:call(?MODULE, warn_exit).
-	gen_server:cast(?MODULE, warn_exit).
+	gen_server_cpre:cast(?MODULE, warn_exit).
 stop() -> 
-	gen_server:stop(?MODULE).
+	gen_server_cpre:stop(?MODULE).
 
 ?INVARIANT(fun invariant/1).
 
@@ -32,29 +32,45 @@ invariant({Passing, Waiting, Total}) ->
 	andalso
 		is_list(Waiting)
 	andalso
-		length(Waiting) > ?THRESHOLD(Total).
+		length(Waiting) =< ?THRESHOLD(Total)
+	.
 
 % This is called when a connection is made to the server
 init([Total]) ->
 	{ok, {0, [], Total}}.
 
 
-cpre({request_enter, _}, {_, Waiting, Total}) ->
-	case length(Waiting) == ?THRESHOLD(Total) of 
-		true -> 
-			case Waiting of 
-				[] ->
-					true;
-				[_|_] ->
-					false
-			end;
-		false -> 
-			true
-	end.
+% cpre(_, _) -> 
+% 	true.
+cpre({request_enter, _}, {Passing, Waiting, Total}) ->
+	% io:format("CPRE: ~p\n", [{Waiting, Total}]),
+	Res = 
+		case length(Waiting) == ?THRESHOLD(Total) of 
+			true -> 
+				case Waiting of 
+					[] ->
+						true;
+					[_|_] ->
+						case Passing of 
+							0 -> 
+								true;
+							_ -> 
+								false 
+						end
+				end;
+			false -> 
+				true
+		end,
+	% io:format("CPRE Res: ~p\n", [Res]),
+	Res;
+cpre(_, _) ->
+	% io:format("CPRE true\n", []),
+	true.
 
 
 % handle_call is invoked in response to gen_server:call
 handle_call({request_enter, EntryPoint}, {From, _}, {Passing, Waiting, Total}) ->
+	% io:format("{Passing, Waiting: ~p\n", [{Passing, length(Waiting)}]),
 	{Reply, {NPassing, NWaiting}} = 
 		case Passing of 
 			0 -> 
