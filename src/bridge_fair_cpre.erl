@@ -1,13 +1,13 @@
-% c(bridge, [{d, edbc}]).
+% c(bridge_fair_cpre, [{d, edbc}]).
 
--module(bridge).
--behaviour(gen_server).
+-module(bridge_fair_cpre).
+-behaviour(gen_server_cpre).
 
 -include_lib("edbc.hrl").
 
 -define(THRESHOLD(Total), Total div 5).
 
--export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3]).
+-export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3, cpre/2]).
 
 -export([start/1, request_enter/1, warn_exit/0, stop/0]).
 
@@ -32,12 +32,25 @@ invariant({Passing, Waiting, Total}) ->
 	andalso
 		is_list(Waiting)
 	andalso
-		length(Waiting) =< ?THRESHOLD(Total)
-	.
+		length(Waiting) > ?THRESHOLD(Total).
 
 % This is called when a connection is made to the server
 init([Total]) ->
 	{ok, {0, [], Total}}.
+
+
+cpre({request_enter, _}, {_, Waiting, Total}) ->
+	case length(Waiting) == ?THRESHOLD(Total) of 
+		true -> 
+			case Waiting of 
+				[] ->
+					true;
+				[_|_] ->
+					false
+			end;
+		false -> 
+			true
+	end.
 
 
 % handle_call is invoked in response to gen_server:call

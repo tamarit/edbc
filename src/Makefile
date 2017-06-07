@@ -9,3 +9,5 @@ run1:
 run2:
 	@erl -run bridge_fair_test test  -noshell -s erlang halt
 
+run3:
+	@erl -run bridge_fair_cpre_test test  -noshell -s erlang halt

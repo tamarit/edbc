@@ -8,6 +8,16 @@
 - Introduce locks
 
 - pre in property testing to check that the inputs of a function have always some properties
+
+prop_calls_to_f() ->
+    ?FORALL({A,B}, {integer(),list(integer())},
+	    ?PRE_CALLSTO(
+	    	fun m:f/3,
+	    	[m:g(A,B), m:h(A), m:i(B,A)],
+	    	?P(1) > 3 andalso is_integer(?P(1)) andalso ?P(1) + ?P(2) > ?P(3)
+	    )
+	).
+
 - decreases  a parameter between calls when recursive
 - implementation of the bridge to see how a pre can hold the starvation problems. "Starvation and Critical Race Analyzers for Ada"
 - solve problems with invariants 
@@ -16,3 +26,5 @@
 - liquid session types
 - use some kind of guard that allows to read or not read a message in a gen_server, i.e. as a CPRE
 - POST condition that check that the function does not take more than a given time to execute
+- The time controling POST could have 2 versions. One that raises an error when the time is passed and another that cut the execution (using an external process) and raises an error. The second version could be very useful for debugging functions generating infinite loops 
+
