@@ -376,7 +376,8 @@ replace_invariant_by_post(Forms) ->
 						{handle_call, 3},
 						{handle_cast, 2},
 						{handle_info, 2},
-						{init, 1}
+						{init, 1},
+						{cpre, 3}
 					]),
 			% NNotInvariantFuns ++ [erl_syntax_lib:map(fun(X) -> X end, build_post_invariant())]
 			NNotInvariantFuns ++ [build_post_invariant()]
@@ -620,6 +621,8 @@ get_free_id(Atom) ->
 % {reply, Reply, NewState,_}
 % {reply, Reply, NewState,_}
 % {stop, Reason, Reply, NewState}
+% {true, State}
+% {false, State}
 % {error, Reason}
 
 % fun() -> post_invariant(F) end
@@ -641,6 +644,10 @@ get_free_id(Atom) ->
 % 		{reply, _, State, _} ->
 % 			F(State);
 % 		{stop, _, _, State} -> 
+% 			F(State);
+% 		{true, State} -> 
+% 			F(State);
+% 		{false, State} -> 
 % 			F(State);
 % 		{error, _} -> 
 % 			true;
@@ -694,6 +701,18 @@ build_post_invariant() ->
 	                        [{atom,91,stop},
 	                         {var,91,'_'},
 	                         {var,91,'_'},
+	                         {var,91,'State'}]}],
+	                   [],
+	                   [{call,92,{var,92,'F'},[{var,92,'State'}]}]},
+	               {clause,91,
+	                   [{tuple,91,
+	                        [{atom,91,true},
+	                         {var,91,'State'}]}],
+	                   [],
+	                   [{call,92,{var,92,'F'},[{var,92,'State'}]}]},
+	               {clause,91,
+	                   [{tuple,91,
+	                        [{atom,91,false},
 	                         {var,91,'State'}]}],
 	                   [],
 	                   [{call,92,{var,92,'F'},[{var,92,'State'}]}]},

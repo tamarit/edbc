@@ -5,7 +5,7 @@
 
 -include_lib("edbc.hrl").
 
--define(THRESHOLD(Total), Total div 5).
+-define(THRESHOLD(Total), Total div 20).
 
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3, cpre/2]).
 

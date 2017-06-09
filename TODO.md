@@ -26,5 +26,8 @@ prop_calls_to_f() ->
 - liquid session types
 - use some kind of guard that allows to read or not read a message in a gen_server, i.e. as a CPRE
 - POST condition that check that the function does not take more than a given time to execute
+- The PRE/POST conditions in the gen_server maybe should make the client fail instead of the server.
 - The time controling POST could have 2 versions. One that raises an error when the time is passed and another that cut the execution (using an external process) and raises an error. The second version could be very useful for debugging functions generating infinite loops 
-- The gen_server_cpre hangs when something fails in the server, specially postconditions. 
+- The gen_server_cpre hangs when something fails in the server, specially postconditions.
+- Modificar puente para que tenga 4 procesos. Realmente los procesos representan los detectores que hay en cada lado del puente (tanto para la entrada como para la salida).
+- Simplify the waiting queues of the readers writers

@@ -46,7 +46,7 @@
 -type max_heap_size()  :: non_neg_integer() |
                           #{ size => non_neg_integer(),
                              kill => true,
-                             error_logger => true}.
+                             error_logger_mod => true}.
 -type spawn_option()   :: 'link'
                         | 'monitor'
                         | {'priority', priority_level()}
@@ -506,7 +506,8 @@ crash_report(Class, Reason, StartF, Stacktrace) ->
     OwnReport = my_info(Class, Reason, StartF, Stacktrace),
     LinkReport = linked_info(self()),
     Rep = [OwnReport,LinkReport],
-    error_logger:error_report(crash_report, Rep).
+    error_logger_mod:error_report(crash_report, Rep).
+    % ok.
 
 my_info(Class, Reason, [], Stacktrace) ->
     my_info_1(Class, Reason, Stacktrace);
@@ -544,14 +545,17 @@ get_ancestors(Pid) ->
 %% some error handles output the messages or the dictionary using ~P
 %% or ~W with depth greater than the depth used here (the depth of
 %% control characters P and W takes precedence over the depth set by
-%% application variable error_logger_format_depth). However, it is
+%% application variable error_logger_mod_format_depth). However, it is
 %% assumed that all report handlers call proc_lib:format().
 get_messages(Pid) ->
     Messages = get_process_messages(Pid),
-    {messages, error_logger:limit_term(Messages)}.
+    % {messages, error_logger_mod:limit_term(Messages)}.
+    {messages, Messages}.
 
 get_process_messages(Pid) ->
-    Depth = error_logger:get_format_depth(),
+    Depth = 
+      % error_logger_mod:get_format_depth(),
+      unlimited,
     case Pid =/= self() orelse Depth =:= unlimited of
         true ->
             {messages, Messages} = get_process_info(Pid, messages),
@@ -568,7 +572,7 @@ receive_messages(0) -> [];
 receive_messages(N) ->
     receive
         M ->
-            [M|receive_messages(N - 1)]
+            [M | receive_messages(N - 1)]
     after 0 ->
             []
     end.
@@ -581,7 +585,8 @@ get_cleaned_dictionary(Pid) ->
 
 cleaned_dict(Dict) ->
     CleanDict = clean_dict(Dict),
-    error_logger:limit_term(CleanDict).
+    % error_logger_mod:limit_term(CleanDict).
+    CleanDict.
 
 clean_dict([{'$ancestors',_}|Dict]) ->
     clean_dict(Dict);
@@ -621,7 +626,7 @@ make_neighbour_reports1([]) ->
   [].
   
 %% Do not include messages or process dictionary, even if
-%% error_logger_format_depth is unlimited.
+%% error_logger_mod_format_depth is unlimited.
 make_neighbour_report(Pid) ->
   [{pid, Pid},
    get_process_info(Pid, registered_name),          

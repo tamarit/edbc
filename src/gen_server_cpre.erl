@@ -147,7 +147,9 @@
       PDict :: [{Key :: term(), Value :: term()}],
       State :: term(),
       Status :: term().
--callback cpre(Request :: term(), State :: term()) -> CanBeServed :: boolean().
+-callback cpre(Request :: term(), From :: {pid(), Tag :: term()}, 
+				State :: term()) -> 
+	{CanBeServed :: boolean(), NewState :: term()}.
 
 -optional_callbacks(
     [handle_info/2, terminate/2, code_change/3, format_status/2]).
@@ -662,9 +664,9 @@ try_terminate(Mod, Reason, State) ->
 %%% Message handling functions
 %%% ---------------------------------------------------
 
-handle_msg({'$gen_call', From, Msg}, Parent, Name, State, Mod, HibernateAfterTimeout) ->
-	case Mod:cpre(Msg, State) of 
-		true -> 
+handle_msg({'$gen_call', From, Msg}, Parent, Name, State0, Mod, HibernateAfterTimeout) ->
+	case Mod:cpre(Msg, From, State0) of 
+		{true, State} -> 
 		    Result = try_handle_call(Mod, Msg, From, State),
 		    case Result of
 				{ok, {reply, Reply, NState}} ->
@@ -685,7 +687,7 @@ handle_msg({'$gen_call', From, Msg}, Parent, Name, State, Mod, HibernateAfterTim
 				    end;
 				Other -> handle_common_reply(Other, Parent, Name, From, Msg, Mod, HibernateAfterTimeout, State)
 		    end;
-		false -> 
+		{false, State} -> 
 			self() ! {'$gen_call', From, Msg},
 			loop(Parent, Name, State, Mod, infinity, HibernateAfterTimeout, [])
 	end;
@@ -884,10 +886,13 @@ error_info(Reason, Name, From, Msg, State, Debug) ->
 			end
 		end;
 	    _ ->
-		error_logger:limit_term(Reason)
+		% error_logger:limit_term(Reason)
+		Reason
 	end,    
     {ClientFmt, ClientArgs} = client_stacktrace(From),
-    LimitedState = error_logger:limit_term(State),
+    LimitedState = 
+    	% error_logger:limit_term(State),
+    	State,
     error_logger:format("** Generic server ~p terminating \n"
                         "** Last message in was ~p~n"
                         "** When Server state == ~p~n"
