@@ -5,8 +5,6 @@
 
 -include_lib("edbc.hrl").
 
--export([test/0]).
-
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2, terminate/2, code_change/3, cpre/3]).
 
 -export([start/0, request_read/0, finish_read/0, request_write/0, finish_write/0, stop/0]).
@@ -15,8 +13,6 @@
 	{
 		readers = 0,
 		writer = false,
-		% pre_writer = none,
-		% pre_pre_writer = none,
 		waiting = [],
 		prev_state = none
 	}).
@@ -34,23 +30,6 @@ finish_write() ->
 	gen_server_cpre:cast(?MODULE, finish_write).
 stop() -> 
 	gen_server_cpre:stop(?MODULE).
-
-test() -> 
-	invariant(
-		{state,0,false,
-                               [{r,a},
-                                {w,b},
-                                {r,c},
-                                {w,d},
-                                {r,e}],
-                               {state,0,false,
-                                      [{r,only_here},
-                                       {r,a},
-                                       {w,b},
-                                       {r,c},
-                                       {w,d},
-                                       {r,e}],
-                                      none}}).
 
 ?INVARIANT(fun invariant/1).
 
@@ -85,7 +64,6 @@ invariant(
 							% true
 					end
 				andalso
-					% io:format("~p\n", [is_substr(Waiting, PrevState#state.waiting)]),
 					is_substr(Waiting, PrevState#state.waiting)
 					% true
 		end

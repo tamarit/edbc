@@ -14,3 +14,6 @@ run3:
 
 run4:
 	@erl -run reader_writer_cpre_test test  -noshell -s erlang halt
+
+run5:
+	@erl -run bridge_good_cpre_test test  -noshell -s erlang halt
