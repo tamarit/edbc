@@ -5,8 +5,11 @@ compile:
 
 # Test cases
 
-run_bridge:
-	@cd examples/bridge/good_cpre;rm -Rf ebin; mkdir ebin; erlc -pa ../../../ebin -I ../../../lib -W0 -o ebin -Dedbc src/*.erl; erl -pa ebin ../../../ebin -run bridge_good_cpre_test test  -noshell  -eval -s erlang halt
+run_bridge_fair:
+	@cd examples/bridge/fair;rm -Rf ebin; mkdir ebin; erlc -pa ../../../ebin -I ../../../lib -W0 -o ebin -Dedbc src/*.erl > output; erl -pa ebin ../../../ebin -run bridge_test test  -noshell  -eval -s erlang halt
+
+run_bridge_unfair:
+	@cd examples/bridge/unfair;rm -Rf ebin; mkdir ebin; erlc -pa ../../../ebin -I ../../../lib -W0 -o ebin -Dedbc src/*.erl; erl -pa ebin ../../../ebin -run bridge_test test  -noshell  -eval -s erlang halt
 
 load_ej1:
 	@cd examples/other;rm -Rf ebin; mkdir ebin; erlc -pa ../../ebin -I ../../lib -W0 -o ebin -Dedbc src/*.erl; erl -pa ebin ../../ebin

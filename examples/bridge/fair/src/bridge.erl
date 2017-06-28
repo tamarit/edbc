@@ -1,6 +1,4 @@
-% c(bridge_good_cpre, [{d, edbc}]).
-
--module(bridge_good_cpre).
+-module(bridge).
 -behaviour(gen_server_cpre).
 
 -include_lib("edbc.hrl").
@@ -43,23 +41,22 @@ invariant(
 		waitingS = WaitingS,
 		prev_state = PrevState
 	}) -> 
-	% % io:format("State: ~p\n", [State]),
-	% 	is_integer(Passing)
+	% io:format("State: ~p\n", [State]),
+		is_integer(Passing)
+	andalso
+		is_boolean(WaitingN)
+	andalso
+		is_boolean(WaitingS)
+	andalso
+		case PrevState of 
+			#state{} -> 
+				true;
+			none -> 
+				true;
+			_ ->
+				false 
+		end
 	% andalso
-	% 	is_boolean(WaitingN)
-	% andalso
-	% 	is_boolean(WaitingS)
-	% andalso
-	% 	case PrevState of 
-	% 		#state{} -> 
-	% 			true;
-	% 		none -> 
-	% 			true;
-	% 		_ ->
-	% 			false 
-	% 	end
-	% % andalso
-	true
 	.
 
 % This is called when a connection is made to the server
@@ -139,17 +136,21 @@ pass(State = #state{passing = Passing}, n) ->
 pass(State = #state{passing = Passing}, s) -> 
 	State#state{passing = Passing + 1, waitingS = false}.
 
-exit_car(State = #state{passing = Passing}, n) -> 
-	case Passing < 0 of 
+exit_car(State, n) -> 
+	exit_car(
+		State, 
+		fun(Passing) -> Passing < 0 end,
+		fun(Passing) -> Passing + 1 end);
+exit_car(State, s) -> 
+	exit_car(
+		State, 
+		fun(Passing) -> Passing > 0 end,
+		fun(Passing) -> Passing - 1 end).
+
+exit_car(State = #state{passing = Passing}, FunCompare, FunUpdate) -> 
+	case FunCompare(Passing) of 
 		true -> 
-			{ok, update_prev_state(State, State#state{passing = Passing + 1})};
-		false -> 
-			{nosense, State}
-	end;
-exit_car(State = #state{passing = Passing}, s) -> 
-	case Passing > 0 of 
-		true -> 
-			{ok, update_prev_state(State, State#state{passing = Passing - 1})};
+			{ok, update_prev_state(State, State#state{passing = FunUpdate(Passing)})};
 		false -> 
 			{nosense, State}
 	end.

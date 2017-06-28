@@ -1,20 +1,20 @@
--module(bridge_good_cpre_test).
+-module(bridge_test).
 
 -export([test/0]).
 
 test() -> 
 	% OutputCompile = 
-		% compile:file(bridge_good_cpre, [{d,edbc}]),
+		% compile:file(bridge, [{d,edbc}]),
 	% io:format("OutputCompile: ~p\n", [OutputCompile]),
 	start(),
 	% timer:sleep(10000),
-	bridge_good_cpre:stop().
+	bridge:stop().
 
 
 start() -> 
 	Total = 
 		50,
-	bridge_good_cpre:start(),
+	bridge:start(),
 	Pids = create_sensors(Total),
 	[Pid!start || Pid <- Pids],
 	[
@@ -59,16 +59,16 @@ sensor_loop(N, entry, Place, Self) ->
 		rand:uniform(100) + 100,
 	timer:sleep(Wait),
 	ok = 
-		bridge_good_cpre:warn_arrival(Place),
+		bridge:warn_arrival(Place),
 	pass = 
-		bridge_good_cpre:request_enter(Place),
+		bridge:request_enter(Place),
 	io:format("A car entered from ~p.\n",[Place]),
 	sensor_loop(N - 1, entry, Place, Self);
 sensor_loop(N, exit, Place, Self) -> 
 	Wait = 
 		rand:uniform(100) + 100,
 	timer:sleep(Wait),
-	case bridge_good_cpre:warn_exit(Place) of
+	case bridge:warn_exit(Place) of
 		nosense -> 
 			sensor_loop(N, exit, Place, Self);
 		ok -> 

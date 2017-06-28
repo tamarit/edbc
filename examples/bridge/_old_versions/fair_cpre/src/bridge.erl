@@ -1,6 +1,4 @@
-% c(bridge_fair_cpre, [{d, edbc}]).
-
--module(bridge_fair_cpre).
+-module(bridge).
 -behaviour(gen_server_cpre).
 
 -include_lib("edbc.hrl").

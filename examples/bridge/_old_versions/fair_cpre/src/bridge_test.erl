@@ -1,20 +1,20 @@
--module(bridge_fair_cpre_test).
+-module(bridge_test).
 
 -export([test/0]).
 
 test() -> 
 	% OutputCompile = 
-		compile:file(bridge_fair_cpre, [{d,edbc}]),
+		compile:file(bridge, [{d,edbc}]),
 	% io:format("OutputCompile: ~p\n", [OutputCompile]),
 	start(),
 	% timer:sleep(10000),
-	bridge_fair_cpre:stop().
+	bridge:stop().
 
 
 start() -> 
 	Total = 
 		100,
-	bridge_fair_cpre:start(Total),
+	bridge:start(Total),
 	Pids = create_cars(Total),
 	[Pid!start || Pid <- Pids],
 	[
@@ -57,7 +57,7 @@ car(Id, EntryPoint) ->
 car_loop(Id, EntryPoint) ->
 	% io:format("Car ~p entering from ~p\n", [Id, EntryPoint]), 
 	Answer = 
-		bridge_fair_cpre:request_enter(EntryPoint),
+		bridge:request_enter(EntryPoint),
 	case Answer of 
 		wait ->
 			% io:format("Car ~p wait for entering from ~p\n", [Id, EntryPoint]),
@@ -65,7 +65,7 @@ car_loop(Id, EntryPoint) ->
 			car_loop(Id, EntryPoint);
 		pass -> 
 			timer:sleep(100),
-			bridge_fair_cpre:warn_exit(),
+			bridge:warn_exit(),
 			io:format("Car ~p passed entering from ~p\n", [Id, EntryPoint]),
 			% car_loop(Id, EntryPoint)
 			get(parent)!finished
