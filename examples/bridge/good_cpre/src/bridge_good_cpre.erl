@@ -43,22 +43,23 @@ invariant(
 		waitingS = WaitingS,
 		prev_state = PrevState
 	}) -> 
-	% io:format("State: ~p\n", [State]),
-		is_integer(Passing)
-	andalso
-		is_boolean(WaitingN)
-	andalso
-		is_boolean(WaitingS)
-	andalso
-		case PrevState of 
-			#state{} -> 
-				true;
-			none -> 
-				true;
-			_ ->
-				false 
-		end
+	% % io:format("State: ~p\n", [State]),
+	% 	is_integer(Passing)
 	% andalso
+	% 	is_boolean(WaitingN)
+	% andalso
+	% 	is_boolean(WaitingS)
+	% andalso
+	% 	case PrevState of 
+	% 		#state{} -> 
+	% 			true;
+	% 		none -> 
+	% 			true;
+	% 		_ ->
+	% 			false 
+	% 	end
+	% % andalso
+	true
 	.
 
 % This is called when a connection is made to the server

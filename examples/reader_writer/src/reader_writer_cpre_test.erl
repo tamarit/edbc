@@ -4,7 +4,7 @@
 
 test() -> 
 	% OutputCompile = 
-		compile:file(reader_writer_cpre, [{d,edbc}]),
+		% compile:file(reader_writer_cpre, [{d,edbc}]),
 	% io:format("OutputCompile: ~p\n", [OutputCompile]),
 	start(),
 	reader_writer_cpre:stop(),

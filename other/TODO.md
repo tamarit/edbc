@@ -1,5 +1,5 @@
 # TODO
-- When there is more than one post or pre join results with an lists:and
+- When there is more than one post or pre join results with lists:and/1
 - Generate edoc from contracts.
 - Generate eunit tests from contracts.
 - Generate property tests from contracts.
@@ -31,3 +31,4 @@ prop_calls_to_f() ->
 - The gen_server_cpre hangs when something fails in the server, specially postconditions.
 - Modificar puente para que tenga 4 procesos. Realmente los procesos representan los detectores que hay en cada lado del puente (tanto para la entrada como para la salida).
 - Simplify the waiting queues of the readers writers
+- Add behaviour info as in https://github.com/uwiger/plain_fsm/blob/master/src/plain_fsm.erl 

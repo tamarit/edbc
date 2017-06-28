@@ -7,7 +7,7 @@
 f(0) -> 1;
 f(N) -> 
     Prev = f(N-1),
-    ?assert(pre_f_i(Prev, N)),
+    % ?assert(pre_f_i(Prev, N)),
     % Bound variables are sent
 	% ?PRE_I(fun pre_f_i/0),
     % Bound variables are not sent (for reusable contracts)

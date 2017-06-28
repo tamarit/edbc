@@ -4,7 +4,7 @@
 
 test() -> 
 	% OutputCompile = 
-		compile:file(bridge_good_cpre, [{d,edbc}]),
+		% compile:file(bridge_good_cpre, [{d,edbc}]),
 	% io:format("OutputCompile: ~p\n", [OutputCompile]),
 	start(),
 	% timer:sleep(10000),
@@ -13,7 +13,7 @@ test() ->
 
 start() -> 
 	Total = 
-		100,
+		50,
 	bridge_good_cpre:start(),
 	Pids = create_sensors(Total),
 	[Pid!start || Pid <- Pids],

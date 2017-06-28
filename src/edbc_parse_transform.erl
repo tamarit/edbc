@@ -549,7 +549,10 @@ search_fun({Name, Arity}, Forms) ->
 	catch 
 		{found, Form} -> 
 			Form
-	end.
+	end;
+search_fun(Other, Forms) ->
+	io:format("Other: ~p\n", [Other]),
+	not_found.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Annotate Bindings
