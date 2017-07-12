@@ -19,11 +19,11 @@
 start() ->
 	gen_server_cpre:start_link({local, ?MODULE}, ?MODULE, [], []).
 request_read() -> 
-	gen_server_cpre:call(?MODULE, request_read).	
+	gen_server_cpre:call(?MODULE, request_read, infinity).	
 finish_read() -> 
 	gen_server_cpre:cast(?MODULE, finish_read).
 request_write() -> 
-	gen_server_cpre:call(?MODULE, request_write).	
+	gen_server_cpre:call(?MODULE, request_write, infinity).	
 finish_write() -> 
 	gen_server_cpre:cast(?MODULE, finish_write).
 stop() -> 

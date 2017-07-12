@@ -17,5 +17,5 @@ load_ej1:
 run_library:
 	@cd examples/other;rm -Rf ebin; mkdir ebin; erlc -pa ../../ebin -I ../../lib -W0 -o ebin -Dedbc src/*.erl; erl -pa ebin ../../ebin -run library_test test1  -noshell  -eval -s erlang halt
 
-run_rw:
-	@cd examples/reader_writer;rm -Rf ebin; mkdir ebin; erlc -pa ../../ebin -I ../../lib -W0 -o ebin -Dedbc src/*.erl; erl -pa ebin ../../ebin -run reader_writer_cpre_test test  -noshell  -eval -s erlang halt
+run_rw_unfair:
+	@cd examples/readers_writers/unfair;rm -Rf ebin; mkdir ebin; erlc -pa ../../../ebin -I ../../../lib -W0 -o ebin -Dedbc src/*.erl; erl -pa ebin ../../../ebin -run readers_writers_test test  -noshell  -eval -s erlang halt
