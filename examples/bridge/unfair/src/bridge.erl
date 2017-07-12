@@ -31,7 +31,7 @@ warn_exit(ExitPoint) ->
 stop() -> 
 	gen_server_cpre:stop(?MODULE).
 
-?INVARIANT(fun invariant/1).
+?INVARIANT(fun invariant_starvation/1).
 
 invariant(
 	State = 
@@ -79,23 +79,64 @@ invariant_starvation(
 			none -> 
 				true;
 			_ ->
-				false 
+				{false, "The state term is not the expected."}
 		end
 	% Starvation condition	
 	andalso
 		case PrevState of 
 			#state{} ->
+				% If the state change corresponds to a car that passed.
 				case abs(Passing) > abs(PrevState#state.passing) of 
 					true -> 
 						case {PrevState#state.waitingN, PrevState#state.waitingS} of 
 							{true, true} -> 
-								PrevState#state.passing == 0; % If both are waiting it means that the direction that was being used have stopped
+								case PrevState#state.passing == 0 of 
+									true -> 
+										true;
+									false -> 
+										% If both are waiting it means that the direction that was being used have stopped
+										{
+											false, 
+											lists:flatten(
+												io_lib:format(
+													"There were cars waiting on both sides. A priority should be given to the cars that wanted to enter from the opposite side of the current way.\n"
+													++ "State info\nCars waiting N (previous state): ~p\nCars waiting S (previous state): ~p\nPrevious passing: ~p\n Current passing: ~p\n", 
+													[PrevState#state.waitingN, PrevState#state.waitingS, PrevState#state.passing, State#state.passing]))
+										}
+								end; 
 							{true, false} -> 
-								Passing < 0; % If there where only cars waiting at N then they should pass.
+								case Passing < 0 of 
+									true -> 
+										true;
+									false -> 
+										% If there where only cars waiting at N then they should pass.
+										{
+											false, 
+											lists:flatten(
+												io_lib:format(
+													"There were cars waiting on the north side. They should pass.\n"
+													++ "State info\nCars waiting N (previous state): ~p\nCars waiting S (previous state): ~p\nPrevious passing: ~p\n Current passing: ~p\n", 
+													[PrevState#state.waitingN, PrevState#state.waitingS, PrevState#state.passing, State#state.passing]))
+										}
+								end; 
 							{false, true} -> 
-								Passing > 0;  % If there where only cars waiting at S then they should pass.
+								case Passing > 0 of 
+									true -> 
+										true;
+									false -> 
+										% If there where only cars waiting at S then they should pass.
+										{
+											false, 
+											lists:flatten(
+												io_lib:format(
+													"There were cars waiting on the south side. They should pass.\n"
+													++ "State info\nCars waiting N (previous state): ~p\nCars waiting S (previous state): ~p\nPrevious passing: ~p\n Current passing: ~p\n", 
+													[PrevState#state.waitingN, PrevState#state.waitingS, PrevState#state.passing, State#state.passing]))
+										}
+								end; 
 							{false, false} -> 
-								false %It is not possible for a car to pass without previously being waiting 
+								%It is not possible for a car to pass without previously being waiting 
+								{false, "A car passed without be previously waiting."} 
 						end;
 					false -> 
 						true
