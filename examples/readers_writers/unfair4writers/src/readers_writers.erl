@@ -10,9 +10,7 @@
 -record(state, 
 	{
 		readers = 0,
-		writer = false,
-		waiting = [],
-		prev_state = none
+		writer = false
 	}).
 
 % These are all wrappers for calls to the server
@@ -35,9 +33,8 @@ invariant(
 	State = 
 		#state{
 			readers = Readers, 
-			writer = Writer, 
-			waiting = Waiting, 
-			prev_state = PrevState}
+			writer = Writer
+		}
 	) -> 
 	% io:format("State: ~p\n" ,[State]),
 		is_integer(Readers)
@@ -45,8 +42,6 @@ invariant(
 		Readers >= 0
 	andalso 
 		is_boolean(Writer)
-	andalso
-		is_list(Waiting)
 	andalso
 		% Common invariant in readers-writers problem
 		((not Writer) orelse Readers == 0)
@@ -56,15 +51,12 @@ invariant(
 init([]) ->
 	{ok, #state{}}.
 
-
-
-
 cpre(request_read, _, State = #state{writer = false}) ->
 	{
 		true, 
 		State
 	};
-cpre(request_read, _, State = #state{writer = true}) ->
+cpre(request_read, _, State) ->
 	{
 		false,
 		State
@@ -95,7 +87,7 @@ handle_call(request_read, _, State) ->
 				readers = State#state.readers + 1
 			}
 		},
-	{reply, Reply, update_prev_state(State, NState)};
+	{reply, Reply, NState};
 handle_call(request_write, _, State) ->
 	{Reply, NState} = 
 		{
@@ -104,7 +96,7 @@ handle_call(request_write, _, State) ->
 				writer = true
 			}
 		},
-	{reply, Reply, update_prev_state(State, NState)};
+	{reply, Reply, NState};
 handle_call(_Message, _From, State) ->
 	% io:format("Error: ~p\n", [_Message]),
 	{reply, error, State}.
@@ -116,18 +108,13 @@ handle_cast(finish_read, State) ->
 		State#state{
 			readers = State#state.readers - 1
 		},
-	{noreply, update_prev_state(State, NState)};
+	{noreply, NState};
 handle_cast(finish_write, State) ->	
 	NState = 
 		State#state{
 			writer = false
 		},
-	{noreply, update_prev_state(State, NState)}.
-
-update_prev_state(State, NState) -> 
-	NState#state{
-		prev_state = State#state{prev_state = none} % To avoid create a useless big structure
-	}.
+	{noreply, NState}.
 
 handle_info(_Message, Library) -> 
 	{noreply, Library}.

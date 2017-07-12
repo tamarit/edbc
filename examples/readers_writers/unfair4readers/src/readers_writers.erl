@@ -11,7 +11,7 @@
 	{
 		readers = 0,
 		writer = false,
-		first_waiting = none,
+		writer_waiting = false,
 		prev_state = none
 	}).
 
@@ -36,7 +36,7 @@ invariant(
 		#state{
 			readers = Readers, 
 			writer = Writer, 
-			first_waiting = FirstWaiting, 
+			writer_waiting = WriterWaiting, 
 			prev_state = PrevState}
 	) -> 
 	% io:format("State: ~p\n" ,[State]),
@@ -46,7 +46,7 @@ invariant(
 	andalso 
 		is_boolean(Writer)
 	andalso
-		((FirstWaiting == none) orelse is_tuple(FirstWaiting))
+		is_boolean(WriterWaiting)
 	andalso
 		case PrevState of 
 			#state{} -> 
@@ -59,51 +59,43 @@ invariant(
 	andalso
 		% Common invariant in readers-writers problem
 		((not Writer) orelse Readers == 0)
+	andalso
+		case ((PrevState /= none) andalso (Readers > PrevState#state.readers)) of 
+			true -> 
+				case PrevState#state.writer_waiting of 
+					true -> 
+						{false, "A reader has entered while a writer was waiting"};
+					false -> 
+						true
+				end;
+			false -> 
+				true
+		end
 	.
 
 % This is called when a connection is made to the server
 init([]) ->
 	{ok, #state{}}.
 
-cpre(request_read, _, State = #state{writer = false, first_waiting = none}) ->
+cpre(request_read, _, State = #state{writer = false, writer_waiting = false}) ->
 	{
 		true, 
 		State
 	};
-cpre(request_read, From, State = #state{writer = false, first_waiting = From}) ->
+cpre(request_read, _, State) ->
+	{
+		false,
+		State
+	};
+cpre(request_write, _, State = #state{writer = false, readers = 0}) ->
 	{
 		true, 
 		State
 	};
-cpre(request_read, From, State = #state{first_waiting = none}) ->
+cpre(request_write, _, State) ->
 	{
 		false,
-		State#state{first_waiting = From}
-	};
-cpre(request_read, From, State) ->
-	{
-		false,
-		State
-	};
-cpre(request_write, _, State = #state{writer = false, readers = 0, first_waiting = none}) ->
-	{
-		true, 
-		State
-	};
-cpre(request_write, From, State = #state{writer = false, readers = 0, first_waiting = From}) ->
-	{
-		true, 
-		State
-	};
-cpre(request_write, From, State = #state{first_waiting = none}) ->
-	{
-		false,
-		State#state{first_waiting = From}
-	};
-cpre(request_write, From, State) ->
-	{
-		false,
-		State
+		State#state{writer_waiting = true}
 	};
 cpre(_, _, State) ->
 	{
@@ -118,8 +110,7 @@ handle_call(request_read, _, State) ->
 		{
 			pass, 
 			State#state{
-				readers = State#state.readers + 1,
-				first_waiting = none
+				readers = State#state.readers + 1
 			}
 		},
 	{reply, Reply, update_prev_state(State, NState)};
@@ -129,7 +120,7 @@ handle_call(request_write, _, State) ->
 			pass, 
 			State#state{
 				writer = true,
-				first_waiting = none
+				writer_waiting = false % This would remove the wating information for the rest of writers which were waiting. However, this information will be available again when the writting requests call CPRE again.
 			}
 		},
 	{reply, Reply, update_prev_state(State, NState)};

@@ -689,7 +689,7 @@ handle_msg({'$gen_call', From, Msg}, Parent, Name, State0, Mod, HibernateAfterTi
 		    end;
 		{false, State} -> 
 			self() ! {'$gen_call', From, Msg},
-            % io:format("Discarded Msg: ~p\n", [{From, Msg}]),
+            % io:format("Discarded Msg: ~p\n", [{{From, Msg}, State}]),
 			loop(Parent, Name, State, Mod, infinity, HibernateAfterTimeout, [])
 	end;
 handle_msg(Msg, Parent, Name, State, Mod, HibernateAfterTimeout) ->
