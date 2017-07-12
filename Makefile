@@ -6,7 +6,7 @@ compile:
 # Test cases
 
 run_bridge_fair:
-	@cd examples/bridge/fair;rm -Rf ebin; mkdir ebin; erlc -pa ../../../ebin -I ../../../lib -W0 -o ebin -Dedbc src/*.erl > output; erl -pa ebin ../../../ebin -run bridge_test test  -noshell  -eval -s erlang halt
+	@cd examples/bridge/fair;rm -Rf ebin; mkdir ebin; erlc -pa ../../../ebin -I ../../../lib -W0 -o ebin -Dedbc src/*.erl; erl -pa ebin ../../../ebin -run bridge_test test  -noshell  -eval -s erlang halt
 
 run_bridge_unfair:
 	@cd examples/bridge/unfair;rm -Rf ebin; mkdir ebin; erlc -pa ../../../ebin -I ../../../lib -W0 -o ebin -Dedbc src/*.erl; erl -pa ebin ../../../ebin -run bridge_test test  -noshell  -eval -s erlang halt

@@ -13,7 +13,7 @@ test() ->
 
 start() -> 
 	Total = 
-		50,
+		100,
 	bridge:start(),
 	Pids = create_sensors(Total),
 	[Pid!start || Pid <- Pids],
@@ -72,7 +72,7 @@ sensor_loop(N, exit, Place, Self) ->
 		nosense -> 
 			sensor_loop(N, exit, Place, Self);
 		ok -> 
-			io:format("A car exited from ~p.\n",[Place]),
+			io:format("A car exited. It entered from ~p.\n",[Place]),
 			sensor_loop(N - 1, exit, Place, Self)
 	end.
 

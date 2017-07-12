@@ -236,6 +236,19 @@ transform_pre_function(Form, FunOrBody, OtherForms) ->
 				erl_syntax:atom(erlang),
 				erl_syntax:atom(error)),
 			[erl_syntax:string("The pre-condition is not hold.")]),
+	ParErrorVar = 
+		get_free_variable(),
+	ParErrorExp = 
+		fun(ErrorMsg) -> 
+			erl_syntax:application(
+				erl_syntax:module_qualifier(
+					erl_syntax:atom(erlang),
+					erl_syntax:atom(error)),
+				[erl_syntax:infix_expr(
+					erl_syntax:string("The pre-condition is not hold: "), 
+					erl_syntax:operator("++"),
+					ErrorMsg)])
+		end,
 	CallToFun = 
 		erl_syntax:application(
 			NewId,
@@ -244,8 +257,15 @@ transform_pre_function(Form, FunOrBody, OtherForms) ->
 		% hd(ParamVars),
 		erl_syntax:case_expr(
 			erl_syntax:block_expr(NewBodyFormPreFun),
-			[erl_syntax:clause([erl_syntax:atom(true)], none, [CallToFun]),
-			 erl_syntax:clause([erl_syntax:atom(false)], none, [ErrorExp])]),
+			[
+				erl_syntax:clause([erl_syntax:atom(true)], none, [CallToFun]),
+			 	erl_syntax:clause([erl_syntax:atom(false)], none, [ErrorExp]),
+			 	erl_syntax:clause(
+				 	[erl_syntax:tuple(
+				 		[erl_syntax:atom(false), ParErrorVar])], 
+				 	none, 
+				 	[ParErrorExp(ParErrorVar)])
+			]),
 	InForm = 
 		erl_syntax:function(
 			FormName,
@@ -305,7 +325,7 @@ transform_post_function(EntryForm, FunOrBody, OtherForms) ->
 	CaseExpr = 
 		hd(erl_syntax:clause_body(
 				hd(erl_syntax:function_clauses(EntryForm)))),
-	[TrueClause, FalseClause] = 
+	[TrueClause, FalseClause, ParFalseClause] = 
 		erl_syntax:case_expr_clauses(CaseExpr),
 	TrueClauseCall = 
 		hd(erl_syntax:clause_body(TrueClause)),
@@ -315,19 +335,40 @@ transform_post_function(EntryForm, FunOrBody, OtherForms) ->
 				erl_syntax:atom(erlang),
 				erl_syntax:atom(error)),
 			[erl_syntax:string("The post-condition is not hold.")]),
+	ParErrorVar = 
+		get_free_variable(),
+	ParErrorExp = 
+		fun(ErrorMsg) -> 
+			erl_syntax:application(
+				erl_syntax:module_qualifier(
+					erl_syntax:atom(erlang),
+					erl_syntax:atom(error)),
+				[erl_syntax:infix_expr(
+					erl_syntax:string("The post-condition is not hold: "), 
+					erl_syntax:operator("++"),
+					ErrorMsg)])
+		end,
 	NewTrueClauseBody = 
 		[
 			erl_syntax:match_expr(VarResult, TrueClauseCall),
 			erl_syntax:case_expr(
 				erl_syntax:block_expr(NewBodyFormPostFun),
-				[erl_syntax:clause([erl_syntax:atom(true)], none, [VarResult]),
-				 erl_syntax:clause([erl_syntax:atom(false)], none, [ErrorExp])])		
+				[
+					erl_syntax:clause([erl_syntax:atom(true)], none, [VarResult]),
+				 	erl_syntax:clause([erl_syntax:atom(false)], none, [ErrorExp]),
+				 	erl_syntax:clause(
+					 	[erl_syntax:tuple(
+					 		[erl_syntax:atom(false), ParErrorVar])], 
+					 	none, 
+					 	[ParErrorExp(ParErrorVar)])
+				 ])		
 		],
 	NewBody = 
 		erl_syntax:case_expr(
 			erl_syntax:case_expr_argument(CaseExpr),
 			[erl_syntax:clause([erl_syntax:atom(true)], none, NewTrueClauseBody),
-			 FalseClause]),	
+			 FalseClause,
+			 ParFalseClause]),	
 	NewEntryForm = 
 		erl_syntax:function(
 			erl_syntax:function_name(EntryForm),

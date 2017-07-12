@@ -12,7 +12,7 @@
 
 -record(state, 
 	{
-		passing = 0,
+		passing = 0, % Negative indicates that the cars are passing from N to S. Possitive from S to N.
 		waitingN = false,
 		waitingS = false,
 		prev_state = none
@@ -23,11 +23,11 @@
 start() ->
 	gen_server_cpre:start_link({local, ?MODULE}, ?MODULE, [], []).
 request_enter(EntryPoint) -> 
-	gen_server_cpre:call(?MODULE, {request_enter, EntryPoint}).	
+	gen_server_cpre:call(?MODULE, {request_enter, EntryPoint}, infinity).	
 warn_arrival(ExitPoint) -> 
-	gen_server_cpre:call(?MODULE, {warn_arrival, ExitPoint}).
+	gen_server_cpre:call(?MODULE, {warn_arrival, ExitPoint}, infinity).
 warn_exit(ExitPoint) -> 
-	gen_server_cpre:call(?MODULE, {warn_exit, ExitPoint}).
+	gen_server_cpre:call(?MODULE, {warn_exit, ExitPoint}, infinity).
 stop() -> 
 	gen_server_cpre:stop(?MODULE).
 
@@ -56,7 +56,27 @@ invariant(
 			_ ->
 				false 
 		end
-	% andalso
+	andalso
+		case PrevState of 
+			#state{} ->
+				case abs(Passing) > abs(PrevState#state.passing) of 
+					true -> 
+						case {PrevState#state.waitingN, PrevState#state.waitingS} of 
+							{true, true} -> 
+								PrevState#state.passing == 0; % If both are waiting it means that the direction that was being used have stopped
+							{true, false} -> 
+								Passing < 0; % If there where only cars waiting at N then they should pass.
+							{false, true} -> 
+								Passing > 0;  % If there where only cars waiting at S then they should pass.
+							{false, false} -> 
+								false %It is not possible for a car to pass without previously being waiting 
+						end;
+					false -> 
+						true
+				end;
+			_ -> 
+				true
+		end
 	.
 
 % This is called when a connection is made to the server
@@ -66,9 +86,15 @@ init([]) ->
 
 % cpre(_, _) -> 
 % 	true.
-cpre({request_enter, n}, _, State = #state{passing = Passing}) when Passing < 0 ->
+cpre({request_enter, n}, _, State = #state{passing = Passing, waitingS = false}) when Passing < 0 ->
 	{
 		true, 
+		State
+	};
+% Next two clauses could be unified
+cpre({request_enter, n}, _, State = #state{passing = Passing, waitingS = true}) when Passing < 0 ->
+	{
+		false, 
 		State
 	};
 cpre({request_enter, s}, _, State = #state{passing = Passing}) when Passing < 0 ->
@@ -76,14 +102,20 @@ cpre({request_enter, s}, _, State = #state{passing = Passing}) when Passing < 0 
 		false,
 		State
 	};
-cpre({request_enter, n}, _, State = #state{passing = Passing}) when Passing > 0 ->
+cpre({request_enter, s}, _, State = #state{passing = Passing, waitingN = false}) when Passing > 0 ->
+	{
+		true, 
+		State
+	};
+% Next two clauses could be unified
+cpre({request_enter, s}, _, State = #state{passing = Passing, waitingN = true}) when Passing > 0 ->
 	{
 		false, 
 		State
 	};
-cpre({request_enter, s}, _, State = #state{passing = Passing}) when Passing > 0 ->
+cpre({request_enter, n}, _, State = #state{passing = Passing}) when Passing > 0 ->
 	{
-		true, 
+		false, 
 		State
 	};
 cpre(_, _, State) ->
@@ -132,7 +164,7 @@ wait(State, s) ->
 	State#state{waitingS = true}.
 
 pass(State = #state{passing = Passing}, n) -> 
-	State#state{passing = Passing - 1, waitingN = false};
+	State#state{passing = Passing - 1, waitingN = false}; %If only one car could be waiting, when it passes we know that there are no more cars waiting there.
 pass(State = #state{passing = Passing}, s) -> 
 	State#state{passing = Passing + 1, waitingS = false}.
 

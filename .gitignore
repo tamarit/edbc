@@ -8,3 +8,9 @@ src/output
 src/output2
 
 examples/bridge/fair/output
+
+output
+
+output_fair
+
+output_unfair
