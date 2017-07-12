@@ -1,6 +1,4 @@
-% c(reader_writer_cpre, [{d, edbc}]).
-
--module(reader_writer_cpre).
+-module(readers_writers).
 -behaviour(gen_server_cpre).
 
 -include_lib("edbc.hrl").
@@ -50,23 +48,26 @@ invariant(
 	andalso
 		is_list(Waiting)
 	andalso
-		case PrevState of 
-			none -> 
-				true; 
-			_ -> 
-					case length(Waiting) > PrevState#state.waiting of 
-						false -> 
-							true;
-						true -> 
-								length(Waiting) == 0 
-							orelse
-								Readers =< PrevState#state.readers
-							% true
-					end
-				andalso
-					is_substr(Waiting, PrevState#state.waiting)
-					% true
-		end
+		% Common invariant in readers-writers problem
+		((not Writer) orelse Readers == 0)
+	% andalso
+	% 	case PrevState of 
+	% 		none -> 
+	% 			true; 
+	% 		_ -> 
+	% 				case length(Waiting) > PrevState#state.waiting of 
+	% 					false -> 
+	% 						true;
+	% 					true -> 
+	% 							length(Waiting) == 0 
+	% 						orelse
+	% 							Readers =< PrevState#state.readers
+	% 						% true
+	% 				end
+	% 			andalso
+	% 				is_substr(Waiting, PrevState#state.waiting)
+	% 				% true
+	% 	end
 	.
 
 
