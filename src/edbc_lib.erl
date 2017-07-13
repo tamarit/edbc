@@ -53,7 +53,7 @@ post_invariant(_, ignore) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 decreasing_check(NewValue, OldValue, F) 
-		when NewValue < OldValue -> 
+		when NewValue =< OldValue -> 
 	F();
 decreasing_check(NewValue, OldValue, _) -> 
 	ErrorMsg = 
