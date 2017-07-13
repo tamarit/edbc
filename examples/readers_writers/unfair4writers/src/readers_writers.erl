@@ -40,6 +40,7 @@ invariant(
 		is_integer(Readers)
 	andalso
 		Readers >= 0
+		% Readers < 0
 	andalso 
 		is_boolean(Writer)
 	andalso

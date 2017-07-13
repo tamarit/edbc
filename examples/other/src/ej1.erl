@@ -1,5 +1,5 @@
 -module(ej1).
--export([f/1, g/1, h/2, i/2]).
+-export([f/1, g/1, h/2, i/2, f_rec/2]).
 
 -include_lib("edbc.hrl").
 
@@ -48,6 +48,27 @@ pre_h() ->
 
 post_i() -> 
     (length(?P(2)) + 1) == length(?R).
+
+
+?DECREASES(?P(2)).
+
+% Example of a failing call
+% ej1:f_rec(1,4). 
+f_rec(M, N) -> 
+    io:format("{M, N}: ~p\n", [{M, N}]),
+    case M of 
+        0 -> 
+            f_rec(M + 1, N + 2);
+        N -> 
+            f_rec(M - 1, N - 1);
+        _ ->
+            case N of 
+                0 -> 
+                    M;
+                _ -> 
+                    f_rec(M, N - 1)
+            end
+    end.
 
 % pre_f_i(Prev, N = 2) -> 
 %     io:format("Prev: ~p\n", [Prev]),
