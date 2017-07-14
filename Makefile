@@ -23,6 +23,5 @@ run_rw_unfair4writers:
 run_rw_unfair4readers:
 	@cd examples/readers_writers/unfair4readers;rm -Rf ebin; mkdir ebin; erlc -pa ../../../ebin -I ../../../lib -W0 -o ebin -Dedbc src/*.erl; erl -pa ebin ../../../ebin -run readers_writers_test test  -noshell  -eval -s erlang halt
 
-
 run_rw_fair:
 	@cd examples/readers_writers/fair;rm -Rf ebin; mkdir ebin; erlc -pa ../../../ebin -I ../../../lib -W0 -o ebin -Dedbc src/*.erl; erl -pa ebin ../../../ebin -run readers_writers_test test  -noshell  -eval -s erlang halt
