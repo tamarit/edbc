@@ -50,7 +50,8 @@ post_i() ->
     (length(?P(2)) + 1) == length(?R).
 
 
-?DECREASES(?P(2)).
+?DECREASES([?P(1), ?P(2)]).
+?PRE(fun() -> ?P(1) < ?P(2) end).
 
 % Example of a failing call
 % ej1:f_rec(1,4). 

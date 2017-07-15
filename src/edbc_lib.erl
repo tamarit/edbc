@@ -1,27 +1,10 @@
 -module(edbc_lib).
--export([post_invariant/2, decreasing_check/3]).
+-export([post_invariant/2, decreasing_check/3, pre/2, post/2]).
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % post_invariant/2
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-% Outputs of the functions modifying the state in gen_server_cpre
-% ===============================================================
-
-% {ok,State}
-% {ok,State,_}
-% {noreply, NewState}
-% {noreply, NewState,_}
-% {stop, Reason, NewState}
-% {reply, Reply, NewState}
-% {reply, Reply, NewState,_}
-% {reply, Reply, NewState,_}
-% {stop, Reason, Reply, NewState}
-% {true, State}
-% {false, State}
-% {error, Reason}
-% ignore
 
 post_invariant(F, {ok, State}) -> 
 	F(State);
@@ -52,15 +35,44 @@ post_invariant(_, ignore) ->
 % decreasing_check/3
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-decreasing_check(NewValue, OldValue, F) 
-		when NewValue =< OldValue -> 
-	F();
-decreasing_check(NewValue, OldValue, _) -> 
-	ErrorMsg = 
-		lists:flatten(
-			io_lib:format(
-					"Decreasing condition does not hold.\n"
-				 	"Previous value: ~p\nNew Value: ~p\n", 
-				[OldValue, NewValue])),
-	error(ErrorMsg).
+decreasing_check(NewValues, OldValues, F) -> 
+	case lists:all(
+			[NewValue =< OldValue 
+			|| {NewValue, OldValue} <- lists:zip(NewValues, OldValues)]) 
+	of 
+		true -> 
+			F();
+		false -> 
+			error("Decreasing condition does not hold.");
+		{false, Msg} -> 
+			error("Decreasing condition does not hold." ++ Msg)
+	end.
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% pre/2
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+pre(Pre, Call) -> 
+	case Pre() of 
+		true -> 
+			Call();
+		false -> 
+			error("The pre-condition is not hold.");
+		{false, Msg} -> 
+			error("The pre-condition is not hold." ++ Msg)
+	end.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% post/2
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+post(Post, Call) ->
+	Res =  Call(),
+	case Post(Res) of 
+		true -> 
+			Res;
+		false -> 
+			error("The post-condition is not hold.");
+		{false, Msg} -> 
+			error("The post-condition is not hold." ++ Msg)
+	end.

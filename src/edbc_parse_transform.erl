@@ -14,10 +14,13 @@ parse_transform(Forms, Options) ->
 	FormsAnnBindings = 
 		case EDBC_ON of 
 			true -> 
-			    FormsAnnBindings0 = 
-					lists:map(
-						fun annotate_bindings_form/1,
-						Forms),
+				% Bindings not used
+			  %   FormsAnnBindings0 = 
+					% lists:map(
+					% 	fun annotate_bindings_form/1,
+					% 	Forms),
+				FormsAnnBindings0 = 
+					Forms,
 				% Send all variable names
 				lists:map(
 					fun send_vars/1,
@@ -27,135 +30,308 @@ parse_transform(Forms, Options) ->
 			false -> 
 				Forms
 		end,
-	FormsPreTrans0 =
-		% FormsAnnBindings,
-		replace_invariant_by_post(FormsAnnBindings),
-	FormsPreTrans1 = 
-		transform(FormsPreTrans0 ,[], [], EDBC_ON),
-	% remove pre atoms between forms
-	FormsPreTrans = 
-		[F || F<- FormsPreTrans1, F /= pre],
+	FormTemp = 
+		search_ebdc_funs(FormsAnnBindings),
+	FormTemp1 = 
+		build_funs(FormTemp, EDBC_ON),
+	% io:format("FormTemp:\n~p\n", [FormTemp1]),
+	[io:format("~s\n", [lists:flatten(erl_prettypr:format(F))]) || F <- FormTemp1],
 	NewForms = 
-		[erl_syntax:revert(IF) || IF <- FormsPreTrans],
-
-	% Uncomment the line bellow to see the generated code
-	% [io:format("~s\n", [lists:flatten(erl_prettypr:format(F))]) || F <- NewForms],
-
-	% Uncomment the two lines bellow and modify FunName value to see the generated code for a concrete function
-	% FunName = post_invariant,
-	% [io:format("~p\n", [F]) || F <- NewForms, erl_syntax:type(F) == function, erl_syntax:atom_value(erl_syntax:function_name(F)) == FunName],
-
+		[erl_syntax:revert(IF) || IF <- FormTemp1],
 	NewForms.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% Tranform code
+% Annotate contracts 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-transform([], _, Acc, _) -> 
-	lists:reverse(Acc);
-transform([Form | Forms], ToRemove, Acc, EDBC_ON) -> 
-	case erl_syntax:type(Form) of 
-		function -> 
-			case 
-				{
-					erl_syntax:atom_value(erl_syntax:function_name(Form)), 
-					erl_syntax:function_arity(Form)
-				} 
-			of 
-				{edbc_pre, 0} -> 
-					case EDBC_ON of 
-						true -> 
-							[NextFun | NewForms] = 
-								Forms,
-							{NewFunction, NextFunFresh, RemovedFuns} = 
-								transform_pre_function(
-									NextFun, 
-									extract_pre_post_fun(Form), 
-									Acc ++ NewForms ++ ToRemove),
-							transform(
-								NewForms, 
-								RemovedFuns ++ ToRemove, 
-								[NextFunFresh, pre, NewFunction | Acc] -- RemovedFuns,
-								EDBC_ON);
+search_ebdc_funs(Forms) ->
+	FunGetNewAccForms = 
+		fun
+			(none, AccForms) -> 
+				AccForms;
+			(PrevFun, AccForms) -> 
+				[PrevFun | AccForms]
+		end,
+	{FForms, _, FPrevFun, FInvariants} = 
+		lists:foldl( 
+			fun(Form, {AccForms, AccPres, PrevFun, AccInvariants}) -> 
+				case erl_syntax:type(Form) of 
+					function -> 
+						case 
+							{
+								erl_syntax:atom_value(
+									erl_syntax:function_name(Form)), 
+								erl_syntax:function_arity(Form)
+							} 
+						of 
+							{edbc_pre, 0} -> 
+								{
+									FunGetNewAccForms(PrevFun, AccForms), 
+									[Form | AccPres], 
+									none, 
+									AccInvariants
+								};
+							{edbc_decreases, 0} -> 
+								{
+									FunGetNewAccForms(PrevFun, AccForms),  
+									[Form | AccPres], 
+									none, 
+									AccInvariants
+								};
+							{edbc_post, 0} ->
+								NPrevFun =
+									case PrevFun of 
+										none -> 
+											PrevFun;
+										_ -> 
+											case erl_syntax:get_ann(PrevFun) of
+												[{PREs, POSTs}] -> 
+													erl_syntax:set_ann(
+														PrevFun,
+														[{PREs, POSTs ++ [Form]}]);
+												_ -> 
+													PrevFun
+											end
+									end,
+								{
+									AccForms, 
+									[], 
+									NPrevFun, 
+									AccInvariants
+								};
+							{edbc_invariant, 0} -> 
+								{
+									AccForms, 
+									AccPres, 
+									PrevFun, 
+									[Form | AccInvariants]
+								};	
+							_ -> 
+								NPrevFun = 
+									erl_syntax:set_ann(
+										Form,
+										[{lists:reverse(AccPres), []}]),
+								{
+									FunGetNewAccForms(PrevFun, AccForms),  
+									[], 
+									NPrevFun, 
+									AccInvariants
+								}
+						end;
+					_ ->
+						{[Form | AccForms], AccPres, PrevFun, AccInvariants}
+				end
+			end,
+			{[], [], none, []},
+			Forms),
+	NFForms = 
+		FunGetNewAccForms(FPrevFun, FForms),
+	FunsChangeState = 
+		[
+			{code_change, 3},
+			{handle_call, 3},
+			{handle_cast, 2},
+			{handle_info, 2},
+			{init, 1},
+			{cpre, 3}
+		],
+	NFInvariants = 
+		[begin
+			{FunInvariantName, FunInvariantArity} = 
+				extract_pre_post_fun(FI),
+			FunInvariant = 
+				erl_syntax:implicit_fun(
+						erl_syntax:atom(FunInvariantName), 
+						erl_syntax:integer(FunInvariantArity)),
+			erl_syntax:function(
+				erl_syntax:atom(edbc_post), 
+				[erl_syntax:clause(
+					[],
+					none,
+					[erl_syntax:fun_expr([
+						erl_syntax:clause(
+							[],
+							none,
+							[erl_syntax:application(
+								erl_syntax:module_qualifier(
+									erl_syntax:atom(edbc_lib),
+									erl_syntax:atom(post_invariant)),
+								[
+									FunInvariant, 
+									erl_syntax:application(erl_syntax:atom(edbc_r), [])])])])])])
+		end
+		|| FI <- FInvariants],
+	lists:map( 
+		fun(Form) -> 
+			case erl_syntax:type(Form) of
+				function -> 
+					FunNameArity =  
+						{
+							erl_syntax:atom_value(
+								erl_syntax:function_name(Form)), 
+							erl_syntax:function_arity(Form)
+						},
+					case lists:member(FunNameArity, FunsChangeState) of 
+						true ->  
+							case erl_syntax:get_ann(Form) of
+								[{PREs, POSTs}] -> 
+									erl_syntax:set_ann(
+										Form,
+										[{PREs, POSTs ++ NFInvariants}]);
+								_ -> 
+									Form
+							end;
 						false -> 
-							RemovedFuns = 
-								[search_fun(
-									extract_pre_post_fun(Form),  
-									Acc ++ Forms ++ ToRemove)],
-							transform(
-								Forms, 
-								RemovedFuns ++ ToRemove, 
-								Acc -- RemovedFuns,
-								EDBC_ON)
+							Form
 					end;
-				{edbc_post, 0} ->
-					case EDBC_ON of 
-						true -> 
-							{OriginalFun, EntryFun, NewAcc} = 
-								case Acc of 
-									[OriginalFun0, pre, EntryFun0 | NewAcc0] -> 
-										{OriginalFun0, EntryFun0, NewAcc0};
-									[OriginalFun0 | NewAcc0] ->
-										{NewFunction, NextFunFresh, []} = 
-											transform_pre_function(
-												OriginalFun0, 
-												[erl_syntax:atom(true)], 
-												[]),
-										{NextFunFresh, NewFunction, NewAcc0}
+				_ ->
+					Form
+			end
+		end,
+		lists:reverse(NFForms)).
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Tranform contracts
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+build_funs(Forms, EDBC_ON) -> 
+	{NForms0, ToRemove0} = 
+		lists:foldl(
+			fun(Form0, {Acc, ToRemove}) -> 
+				case erl_syntax:type(Form0) of 
+					function ->
+						% All functions have an annotation
+						[{PREs, POSTs}] = 
+							erl_syntax:get_ann(Form0),
+						Form = 
+							erl_syntax:set_ann(Form0, []),
+						{PreDec0, PreOther0} = 
+							lists:foldl(
+								fun(FormPre, {AccDec, AccOther}) ->
+									case 
+										{
+											erl_syntax:atom_value(
+												erl_syntax:function_name(FormPre)), 
+											erl_syntax:function_arity(FormPre)
+										} 
+									of 
+										{edbc_decreases, 0} -> 
+											{[FormPre | AccDec], AccOther};
+										_Other ->
+											% io:format("Other: ~p\n", [_Other]),
+											{AccDec, [FormPre | AccOther]}
+									end
 								end,
-							{NewEntryFun, RemovedFuns} = 
-								transform_post_function(
-									EntryFun, 
-									extract_pre_post_fun(Form), 
-									Acc ++ Forms ++ ToRemove),
-							transform(
-								Forms, 
-								RemovedFuns ++ ToRemove,  
-								[OriginalFun, NewEntryFun | NewAcc] -- RemovedFuns,
-								EDBC_ON);
-						false -> 
-							RemovedFuns = 
-								[search_fun(
-									extract_pre_post_fun(Form),  
-									Acc ++ Forms ++ ToRemove)],
-							transform(
-								Forms, 
-								RemovedFuns ++ ToRemove, 
-								Acc -- RemovedFuns,
-								EDBC_ON)
-					end;
-				{edbc_decreases, 0} ->
-					case EDBC_ON of 
+								{[], []},
+								PREs),
+						{PreDec, PreOther} =
+							{lists:reverse(PreDec0), lists:reverse(PreOther0)},
+						{NewForm, NAcc} = 
+							case {PreDec, EDBC_ON} of 
+								{[PreDecFun | _], true} ->	
+									{NewForm0, AuxFun} = 	
+										transform_decreases_function2(
+											Form,
+											extract_decrease_paramenter(PreDecFun)),
+									{
+										NewForm0,
+										[AuxFun | Acc]
+									};
+								_ ->
+									{
+										Form, 
+										Acc
+									}
+							end,
+						{FForm, NewFuns, NToRemove} = 
+							lists:foldl(
+								fun(ContractFun, {CurrentForm, NewFuns, ToRemove}) -> 
+									case 
+										{
+											erl_syntax:atom_value(erl_syntax:function_name(ContractFun)), 
+											erl_syntax:function_arity(ContractFun),
+											EDBC_ON
+										}  
+									of 
+										{edbc_pre, 0, true} -> 
+											{NewFunction, NCurrentForm, RemovedFuns} = 
+												transform_pre_function2(
+													CurrentForm, 
+													extract_pre_post_fun(ContractFun), 
+													Forms),
+											{
+												NCurrentForm, 
+												[NewFunction | NewFuns], 
+												ToRemove ++ RemovedFuns
+											};
+										{edbc_post, 0, true} -> 
+											{NewFunction, NCurrentForm, RemovedFuns} = 
+												transform_post_function2(
+													CurrentForm, 
+													extract_pre_post_fun(ContractFun), 
+													Forms),
+											{
+												NCurrentForm, 
+												[NewFunction | NewFuns], 
+												ToRemove ++ RemovedFuns
+											};
+										_ -> 
+											RemovedFuns = 
+												[search_fun(
+													extract_pre_post_fun(ContractFun),  
+													Forms)],
+											{
+												CurrentForm,
+												NewFuns,
+												ToRemove ++ RemovedFuns
+											}
+									end
+								end,
+								{NewForm, [], []},
+								PreOther ++ POSTs),
+						{[FForm | NewFuns ++ NAcc], ToRemove ++ NToRemove};
+					_ -> 
+						{[Form0 | Acc], ToRemove}
+				end
+			end,
+			{[], []},
+			Forms),
+	NForms1 = 
+		remove_funs(NForms0, ToRemove0),
+	NForms1.
+
+remove_funs(Forms, ToRemove) -> 
+	ToRemoveFunArity = 
+		lists:map(
+			fun(FormToRemove) -> 
+				{
+					erl_syntax:atom_value(erl_syntax:function_name(FormToRemove)), 
+					erl_syntax:function_arity(FormToRemove)
+				}
+			end,
+			ToRemove),
+	lists:foldl(
+		fun(Form, Acc) -> 
+			case erl_syntax:type(Form) of 
+				function -> 
+					FunArity = 
+						{
+							erl_syntax:atom_value(erl_syntax:function_name(Form)), 
+							erl_syntax:function_arity(Form)
+						},
+					case lists:member(FunArity, ToRemoveFunArity) of 
 						true -> 
-							[NextFun | NewForms] = 
-								Forms,
-							{NewFunction, NextFunFresh} = 
-								transform_decreases_function(
-									NextFun, 
-									extract_decrease_paramenter(Form)),
-							transform(
-								NewForms, 
-								ToRemove, 
-								[NextFunFresh, NewFunction | Acc],
-								EDBC_ON);
+							Acc;
 						false -> 
-							transform(
-								Forms, 
-								ToRemove, 
-								Acc,
-								EDBC_ON)
+							[Form | Acc]
 					end;
 				_ -> 
-					case lists:member(Form, ToRemove) of 
-						true -> 
-							transform(Forms, ToRemove, Acc, EDBC_ON);
-						false -> 
-							transform(Forms, ToRemove, [Form | Acc], EDBC_ON)
-					end
-			end;
-		_ -> 
-			transform(Forms, ToRemove, [Form | Acc], EDBC_ON)
-	end.
+					[Form | Acc]
+			end
+		end,
+		[],
+		Forms).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % PRE transformation
@@ -196,42 +372,29 @@ transform_pre_function(Form, FunOrBody, OtherForms) ->
 						Body),
 				{[], NBody}
 		end,
-	ErrorExp = 
-		erl_syntax:application(
-			erl_syntax:module_qualifier(
-				erl_syntax:atom(erlang),
-				erl_syntax:atom(error)),
-			[erl_syntax:string("The pre-condition is not hold.")]),
-	ParErrorVar = 
-		get_free_variable(),
-	ParErrorExp = 
-		fun(ErrorMsg) -> 
-			erl_syntax:application(
-				erl_syntax:module_qualifier(
-					erl_syntax:atom(erlang),
-					erl_syntax:atom(error)),
-				[erl_syntax:infix_expr(
-					erl_syntax:string("The pre-condition is not hold: "), 
-					erl_syntax:operator("++"),
-					ErrorMsg)])
-		end,
 	CallToFun = 
 		erl_syntax:application(
 			NewId,
 			ParamVars),
 	BodyInForm = 
-		% hd(ParamVars),
-		erl_syntax:case_expr(
-			erl_syntax:block_expr(NewBodyFormPreFun),
-			[
-				erl_syntax:clause([erl_syntax:atom(true)], none, [CallToFun]),
-			 	erl_syntax:clause([erl_syntax:atom(false)], none, [ErrorExp]),
-			 	erl_syntax:clause(
-				 	[erl_syntax:tuple(
-				 		[erl_syntax:atom(false), ParErrorVar])], 
-				 	none, 
-				 	[ParErrorExp(ParErrorVar)])
-			]),
+		erl_syntax:application(
+			erl_syntax:module_qualifier(
+				erl_syntax:atom(edbc_lib),
+				erl_syntax:atom(pre)),
+				[
+					erl_syntax:fun_expr([
+						erl_syntax:clause(
+								[],
+								none,
+								NewBodyFormPreFun
+							)]),
+					erl_syntax:fun_expr([
+						erl_syntax:clause(
+								[],
+								none,
+								[CallToFun]
+							)])
+				]),
 	InForm = 
 		erl_syntax:function(
 			FormName,
@@ -245,14 +408,24 @@ transform_pre_function(Form, FunOrBody, OtherForms) ->
 % POST transformation
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-transform_post_function(EntryForm, FunOrBody, OtherForms) ->
+transform_post_function(Form, FunOrBody, OtherForms) ->
+	FormName = 
+		erl_syntax:function_name(Form),
+	NewId = 
+		get_free_id( 
+			erl_syntax:atom_value(
+				FormName)),
+	NForm = 
+		erl_syntax:function(
+			NewId, 
+			erl_syntax:function_clauses(Form)),
+	ParamOrderVars = 
+		[ 	{Order, get_free_variable()} 
+		|| 	Order <- lists:seq(1, erl_syntax:function_arity(NForm))],
+	ParamVars = 
+		element(2, lists:unzip(ParamOrderVars)),
 	VarResult = 
 		get_free_variable(),
-	Parameters = 
-		erl_syntax:clause_patterns(
-			hd(erl_syntax:function_clauses(EntryForm))),
-	ParamOrderVars = 
-		lists:zip(lists:seq(1, length(Parameters)),Parameters),
 	{FormPostFun, NewBodyFormPostFun} = 
 		case FunOrBody of 
 			{NamePreFun, ArityPreFun} -> 
@@ -279,170 +452,43 @@ transform_post_function(EntryForm, FunOrBody, OtherForms) ->
 				% io:format("NBody: " ++ erl_prettypr:format(NBody) ++ "\n"),
 				{[], NBody}
 		end,
-	% FormPostFun = 
-	% 	search_fun({NamePreFun, ArityPreFun}, OtherForms),
-	% NewBodyFormPostFun = 
-	% 	replace_result(
-	% 		VarResult,
-	% 		replace_params(
-	% 			ParamOrderVars, 
-	% 			erl_syntax:clause_body(
-	% 				hd(erl_syntax:function_clauses(FormPostFun))))),
-	CaseExpr = 
-		hd(erl_syntax:clause_body(
-				hd(erl_syntax:function_clauses(EntryForm)))),
-	[TrueClause, FalseClause, ParFalseClause] = 
-		erl_syntax:case_expr_clauses(CaseExpr),
-	TrueClauseCall = 
-		hd(erl_syntax:clause_body(TrueClause)),
-	ErrorExp = 
+	CallToFun = 
+		erl_syntax:application(
+			NewId,
+			ParamVars),
+	BodyInForm = 
 		erl_syntax:application(
 			erl_syntax:module_qualifier(
-				erl_syntax:atom(erlang),
-				erl_syntax:atom(error)),
-			[erl_syntax:string("The post-condition is not hold.")]),
-	ParErrorVar = 
-		get_free_variable(),
-	ParErrorExp = 
-		fun(ErrorMsg) -> 
-			erl_syntax:application(
-				erl_syntax:module_qualifier(
-					erl_syntax:atom(erlang),
-					erl_syntax:atom(error)),
-				[erl_syntax:infix_expr(
-					erl_syntax:string("The post-condition is not hold: "), 
-					erl_syntax:operator("++"),
-					ErrorMsg)])
-		end,
-	NewTrueClauseBody = 
-		[
-			erl_syntax:match_expr(VarResult, TrueClauseCall),
-			erl_syntax:case_expr(
-				erl_syntax:block_expr(NewBodyFormPostFun),
+				erl_syntax:atom(edbc_lib),
+				erl_syntax:atom(post)),
 				[
-					erl_syntax:clause([erl_syntax:atom(true)], none, [VarResult]),
-				 	erl_syntax:clause([erl_syntax:atom(false)], none, [ErrorExp]),
-				 	erl_syntax:clause(
-					 	[erl_syntax:tuple(
-					 		[erl_syntax:atom(false), ParErrorVar])], 
-					 	none, 
-					 	[ParErrorExp(ParErrorVar)])
-				 ])		
-		],
-	NewBody = 
-		erl_syntax:case_expr(
-			erl_syntax:case_expr_argument(CaseExpr),
-			[erl_syntax:clause([erl_syntax:atom(true)], none, NewTrueClauseBody),
-			 FalseClause,
-			 ParFalseClause]),	
-	NewEntryForm = 
+					erl_syntax:fun_expr([
+						erl_syntax:clause(
+								[VarResult],
+								none,
+								NewBodyFormPostFun
+							)]),
+					erl_syntax:fun_expr([
+						erl_syntax:clause(
+								[],
+								none,
+								[CallToFun]
+							)])
+				]),
+	InForm = 
 		erl_syntax:function(
-			erl_syntax:function_name(EntryForm),
+			FormName,
 			[erl_syntax:clause(
-				Parameters,
+				ParamVars,
 				none,
-				[NewBody])]),
-	{NewEntryForm, FormPostFun}.
-
-% %%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% % INVARIANT transformation
-% %%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-replace_invariant_by_post(Forms) ->
-	InvariantFuns =  
-		[ 
-			Form
-		|| 
-			Form <- Forms, 
-			erl_syntax:type(Form) == function, 
-			erl_syntax:atom_value(erl_syntax:function_name(Form)) == edbc_invariant,
-			erl_syntax:function_arity(Form) == 0
-		],
-	case InvariantFuns of 
-		[] -> 
-			% io:format("No invariants\n"),
-			Forms;
-		[IF|_] -> 
-			NotInvariantFuns = 
-				Forms -- InvariantFuns,
-			{FunInvariantName, FunInvariantArity} = 
-				extract_pre_post_fun(IF),
-			FunInvariant = 
-				erl_syntax:implicit_fun(
-					% erl_syntax:arity_qualifier(
-						erl_syntax:atom(FunInvariantName), 
-						erl_syntax:integer(FunInvariantArity)),
-				% ),
-			% io:format("PF: " ++ erl_prettypr:format(FunInvariant) ++ "\n"),
-			NNotInvariantFuns = 
-				add_post_after(
-					NotInvariantFuns,
-					FunInvariant,
-					[
-						{code_change, 3},
-						{handle_call, 3},
-						{handle_cast, 2},
-						{handle_info, 2},
-						{init, 1},
-						{cpre, 3}
-					]),
-			% NNotInvariantFuns ++ [erl_syntax_lib:map(fun(X) -> X end, build_post_invariant())]
-			% NNotInvariantFuns ++ [build_post_invariant()]
-			NNotInvariantFuns
-	end.
-
-add_post_after(Forms, _, []) -> 
-	Forms;
-add_post_after(Forms, FunInvariant, [FunGenServer | FunsGenServer]) -> 
-	NFormsRev = 
-		lists:foldl(
-			fun (Form, Acc)   ->
-				case erl_syntax:type(Form) of 
-					function -> 
-						case 
-							{
-								erl_syntax:atom_value(erl_syntax:function_name(Form)), 
-								erl_syntax:function_arity(Form)
-							} 
-						of 
-							FunGenServer ->
-								FunPost = 
-									erl_syntax:function(
-										erl_syntax:atom(edbc_post), 
-										[erl_syntax:clause(
-											[],
-											none,
-											[erl_syntax:fun_expr([
-												erl_syntax:clause(
-													[],
-													none,
-													[erl_syntax:application(
-														% erl_syntax:atom(edbc_post_invariant),
-														erl_syntax:module_qualifier(
-															erl_syntax:atom(edbc_lib),
-															erl_syntax:atom(post_invariant)),
-														[
-															FunInvariant, 
-															erl_syntax:application(erl_syntax:atom(edbc_r), [])])])])])]),
-								% io:format("FunPost:~p\n", [FunPost]),
-									% edbc_post() -> fun() -> post_invariant(F) end 
-								[FunPost, Form | Acc];
-							_ -> 
-								[Form | Acc]
-						end;
-					_ -> 
-						[Form | Acc]
-				end 
-			end,
-			[],
-			Forms),
-	add_post_after(lists:reverse(NFormsRev), FunInvariant, FunsGenServer).
+				[BodyInForm])]),
+	{InForm, NForm, FormPostFun}.
 	
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % DECREASES transformation
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-transform_decreases_function(Function, ParNumber) ->
+transform_decreases_function(Function, ParNumbers) ->
 	% io:format("ParNumber: ~p\n", [ParNumber]),
 	FunctionName =
 		erl_syntax:function_name(Function),
@@ -459,7 +505,7 @@ transform_decreases_function(Function, ParNumber) ->
 					Clause, 
 					FunctionName, 
 					AuxFunctionName, 
-					ParNumber)
+					ParNumbers)
 			end,
 			FunctionClauses),
 	NewFunction = 
@@ -469,11 +515,13 @@ transform_decreases_function(Function, ParNumber) ->
 	AuxFunctionOldValuePar = 
 		get_free_variable(),
 	AuxFunctionPars0 =
-		[get_free_variable() || _ <- lists:seq(1, length(erl_syntax:clause_patterns(hd(FunctionClauses))))],
+		[get_free_variable() || _ <- lists:seq(1, erl_syntax:function_arity(Function))],
 	AuxFunctionNewValuePar =
-		lists:nth(
-			ParNumber,
-			AuxFunctionPars0),
+		erl_syntax:list(
+			[lists:nth(
+				ParNumber,
+				AuxFunctionPars0)
+			|| ParNumber <- ParNumbers]),
 	AuxFunctionPars = 
 		[AuxFunctionOldValuePar | AuxFunctionPars0],
 	AuxFunctionClauseCall = 
@@ -504,11 +552,14 @@ transform_decreases_function(Function, ParNumber) ->
 			[AuxFunctionClause]),
 	{NewFunction, AuxFunction}.
 	
-replace_recursive_calls(Clause, FunctionName, AuxFunctionName, ParNumber) -> 
-	Parameter = 
-		lists:nth(
-			ParNumber,
-			erl_syntax:clause_patterns(Clause)),
+
+replace_recursive_calls(Clause, FunctionName, AuxFunctionName, ParNumbers) -> 
+	Parameters = 
+		erl_syntax:list(
+			[lists:nth(
+				ParNumber,
+				erl_syntax:clause_patterns(Clause))
+			|| ParNumber <- ParNumbers]),
 	erl_syntax_lib:map(
 		fun(Node) -> 
 			case erl_syntax:type(Node) of 
@@ -520,7 +571,7 @@ replace_recursive_calls(Clause, FunctionName, AuxFunctionName, ParNumber) ->
 								true -> 
 									erl_syntax:application(
 										AuxFunctionName, 
-										[Parameter | erl_syntax:application_arguments(Node)]);
+										[Parameters | erl_syntax:application_arguments(Node)]);
 								false -> 
 									Node
 							end;
@@ -559,40 +610,32 @@ extract_pre_post_fun(Form) ->
 			{NamePreFun, ArityPreFun}
 	end.
 
-
 extract_decrease_paramenter(Form) -> 
-	ErrorMsg = 
-		fun() -> 
-			error("There should be a parameter, i.e. ?P(N), in the decrease contract.")
-		end,
-	BodyForm = 
-		hd(erl_syntax:clause_body(
-			hd(erl_syntax:function_clauses(Form)))),
-	case erl_syntax:type(BodyForm) of 
-		application -> 
+	FunExtractPar = 
+		fun(App) -> 
 			Op = 
-				erl_syntax:application_operator(BodyForm),
-			case erl_syntax:type(Op) of 
-				atom -> 
-					case erl_syntax:atom_value(Op) of 
-						edbc_p ->
-							case length(erl_syntax:application_arguments(BodyForm)) of 
-								1 -> 
-									Param = 
-										erl_syntax:integer_value(
-											hd(erl_syntax:application_arguments(BodyForm))),
-									Param;
-								_ -> 
-									ErrorMsg()
-							end;
-						_ -> 
-							ErrorMsg()
-					end;
-				_ -> 
-					ErrorMsg()
-			end;
-		_ -> 
-			ErrorMsg() 
+				erl_syntax:application_operator(App),
+			edbc_p = 
+				erl_syntax:atom_value(Op),
+			1 = 
+				length(erl_syntax:application_arguments(App)),
+			Arg = 
+				hd(erl_syntax:application_arguments(App)),
+			erl_syntax:integer_value(Arg)
+		end,
+	try
+		BodyForm = 
+			hd(erl_syntax:clause_body(
+				hd(erl_syntax:function_clauses(Form)))),
+		case erl_syntax:type(BodyForm) of 
+			application -> 
+				[FunExtractPar(BodyForm)];
+			list ->
+				[FunExtractPar(E) || E <- erl_syntax:list_elements(BodyForm)]
+		end
+	catch
+		_:_ -> 
+			error("There should be a parameter or a list of parameters, i.e. ?P(N) or [?P(M),?P(N)], in the decrease contract.")
 	end.
 
 replace_params(DictParams, Es) -> 
@@ -696,7 +739,7 @@ search_fun({Name, Arity}, Forms) ->
 			Form
 	end;
 search_fun(Other, Forms) ->
-	io:format("Other: ~p\n", [Other]),
+	% io:format("Other: ~p\n", [Other]),
 	not_found.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
