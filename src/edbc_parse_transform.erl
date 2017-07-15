@@ -30,14 +30,16 @@ parse_transform(Forms, Options) ->
 			false -> 
 				Forms
 		end,
-	FormTemp = 
+	Form1 = 
 		search_ebdc_funs(FormsAnnBindings),
-	FormTemp1 = 
-		build_funs(FormTemp, EDBC_ON),
-	% io:format("FormTemp:\n~p\n", [FormTemp1]),
-	[io:format("~s\n", [lists:flatten(erl_prettypr:format(F))]) || F <- FormTemp1],
+	Form2 = 
+		build_funs(Form1, EDBC_ON),
+
+	% uncomment to print the pretty-printted version of the code
+	% [io:format("~s\n", [lists:flatten(erl_prettypr:format(F))]) || F <- Form2],
+
 	NewForms = 
-		[erl_syntax:revert(IF) || IF <- FormTemp1],
+		[erl_syntax:revert(IF) || IF <- Form2],
 	NewForms.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
