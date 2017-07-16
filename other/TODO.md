@@ -3,31 +3,10 @@
 PRE, POST, ...
 ==============
 
-- Replace most of the tranformations by function calls to functions (in edbc_lib). For instance the PRE, POST and CALL (all of them are anonymous functions) can be parameters of a function in edbc_lib that would be somethin like:
-- When there is more than one post or pre join results with lists:and/1
-
-```
-	case PRE() of 
-		true - >
-			Result = CALL(),
-			case POST(Result) of 
-				true -> 
-					Result
-				false -> 
-					...;
-				...
-			end;
-		false -> 
-			...
-		...
-	end
-```
-
-- Produce default values instead of an error, i.e. ?PRE(fun.., DefaultValue)
-- Produce a personalized error message for PREs y POSTs, i.e. ?PRE(fun.., ErrorMsg)
-- Last two extensions are mutually exclusive. If there is a default value, then there is not sens for an error message, and viceversa.
+- Produce default values instead of an error, i.e. ?PRE(fun.., DefaultValue). An alternative to a different macro is to return {false, {default_value, Value}} in the PRE function.
+- Produce a personalized error message for PREs y POSTs, i.e. ?PRE(fun.., ErrorMsg). An alternative to a specific macro is to return {false, Msg}.
+- Last two extensions are mutually exclusive. If there is a default value, then there is not sens for an error message, and viceversa. This is automatically dsone by an specific message error.
 - decreases for a recursions a -> b -> a -> b
-- Allow to integreate PREs, POSTs, y DECREASEs
 - POST condition that check that the function does not take more than a given time to execute
 - The time controling POST could have 2 versions. One that raises an error when the time is passed and another that cut the execution (using an external process) and raises an error. The second version could be very useful for debugging functions generating infinite loops 
 
@@ -46,7 +25,7 @@ GEN_SERVER_CPRE
 Other
 =====
 
-- Generate edoc from contracts.
+- Generate edoc from contracts. TRIED: found some problems importing hrl file. 
 - Generate eunit tests from contracts.
 - Generate property tests from contracts.
 - Invariants when spawning a new process, such as its number of queued messages cannot be greater than 1, etc.
