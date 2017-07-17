@@ -1,5 +1,5 @@
 -module(ej1).
--export([f/1, g/1, h/2, i/2, f_rec/2, f_time/1]).
+-export([f/1, g/1, h/2, i/2, f_rec/2, f_time/1, f_pure/0]).
 
 -include_lib("edbc.hrl").
 
@@ -85,6 +85,25 @@ f_rec(M, N) ->
 % ej1:f_time(lists:seq(1,10)).
 f_time(L) -> 
     [timer:sleep(100) || _ <- L].
+
+?PURE.
+f_pure() -> 
+    % Detected side-effect operations
+    % os:cmd("ls"),
+    % io:format("I'm not pure"),
+    spawn(fun() -> ok end),
+    % self()!hi,
+    % dets:open_file(table, []),
+    % ets:new(table, [set]),
+    % rand:uniform(30),
+    % put(r, 1),
+    % Not-detected side-effect operations
+    % get(r),
+    % This exits are reported as they are (they are not affected by the tracing). However, the tracestack is lost.
+    % 3/0,
+    % exit("out"),
+    % throw("out"),
+    ok.
 
 % pre_f_i(Prev, N = 2) -> 
 %     io:format("Prev: ~p\n", [Prev]),

@@ -88,6 +88,13 @@ search_ebdc_funs(Forms) ->
 									none, 
 									AccInvariants
 								};
+							{edbc_pure, 0} -> 
+								{
+									FunGetNewAccForms(PrevFun, AccForms), 
+									[Form | AccPres], 
+									none, 
+									AccInvariants
+								};
 							{edbc_post, 0} ->
 								NPrevFun =
 									case PrevFun of 
@@ -279,6 +286,17 @@ build_funs(Forms, EDBC_ON) ->
 												[NewFunction | NewFuns], 
 												ToRemove ++ RemovedFuns
 											};
+										{{edbc_pure, 0}, true} -> 
+											{NewFunction, NCurrentForm, RemovedFuns} = 
+												transform_pure_function(
+													CurrentForm, 
+													[erl_syntax:atom(true)], 
+													Forms),
+											{
+												NCurrentForm, 
+												[NewFunction | NewFuns], 
+												ToRemove ++ RemovedFuns
+											};
 										{{edbc_post, 0}, true} -> 
 											{NewFunction, NCurrentForm, RemovedFuns} = 
 												transform_post_function(
@@ -438,6 +456,9 @@ transform_expected_time_function(Form, FunOrBody, OtherForms) ->
 
 transform_timeout_function(Form, FunOrBody, OtherForms) ->
 	transform_pre_post_function(Form, FunOrBody, OtherForms, false, timeout).
+
+transform_pure_function(Form, FunOrBody, OtherForms) ->
+	transform_pre_post_function(Form, FunOrBody, OtherForms, false, is_pure).
 
 transform_post_function(Form, FunOrBody, OtherForms) ->
 	transform_pre_post_function(Form, FunOrBody, OtherForms, true, post).

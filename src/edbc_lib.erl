@@ -5,7 +5,8 @@
 			pre/2, 
 			post/2,
 			expected_time/2,
-			timeout/2
+			timeout/2,
+			is_pure/2
 		]).
 
 
@@ -132,4 +133,92 @@ timeout(Time, Call) ->
 						"The execution of the function took more time than the expected, i.e. ~p ms.\n", 
 						[Timeout])),
 			error(ErrorMsg)
+	end.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% is_pure/2
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% To unify the interface of all the pre/post functions
+is_pure(_, Call) -> 
+	is_pure(Call).
+
+is_pure(Call) -> 
+	Self = 
+		self(),
+	StartRef = 
+		make_ref(),
+	EndRef = 
+		make_ref(),
+	Pid = 
+		spawn(
+			fun() -> 
+				receive 
+					{start, StartRef} -> 
+						ok
+				end,
+				Res = 
+					try Call() of
+						Res0 ->
+							Res0
+					catch
+						E1:E2  ->
+							{edbc_error, {E1, E2}}
+					end,
+				Self ! {Res, EndRef}
+			end),
+	erlang:trace(Pid, true, [call, set_on_spawn, procs, ports, send, 'receive']),
+	erlang:trace_pattern({'_','_','_'}, true, []),
+	Pid!{start, StartRef},
+	Result = 
+		is_pure_tracer(Pid, StartRef, EndRef, none),
+	case Result of 
+		edbc_error ->
+			error("The function is not pure.");
+		{edbc_error, {error, Reason}} -> 
+			error(Reason);
+		{edbc_error, {throw, Reason}} -> 
+			throw(Reason);
+		{edbc_error, {exit, Reason}} -> 
+			exit(Reason);
+		Res -> 
+			Res
+	end.
+
+is_pure_tracer(Pid, StartRef, EndRef, Res) -> 
+	receive 
+		{trace, Pid, exit, _} ->
+			Res;
+		{trace, Pid, 'receive', {start, StartRef}} -> 
+			is_pure_tracer(Pid, StartRef, EndRef, Res);
+		{trace, Pid, send, {_, EndRef}, _} ->
+			is_pure_tracer(Pid, StartRef, EndRef, Res);
+		{FRes, EndRef} -> 
+			case Res of 
+				none -> 
+					is_pure_tracer(Pid, StartRef, EndRef, FRes);
+				_ -> 
+					case FRes of 
+						{edbc_error, _} -> 
+							is_pure_tracer(Pid, StartRef, EndRef, FRes);
+						_ -> 
+							is_pure_tracer(Pid, StartRef, EndRef, Res)
+					end
+			end;
+		{trace, Pid, call, {M, F, Args}} -> 
+			Arity = length(Args),
+			case erlang:is_builtin(M, F, Arity) of 
+				true -> 
+					case erl_bifs:is_pure(M, F, Arity) of 
+						false -> 
+							is_pure_tracer(Pid, StartRef, EndRef, edbc_error);
+						true -> 
+							is_pure_tracer(Pid, StartRef, EndRef, Res)
+					end;
+				false -> 
+					is_pure_tracer(Pid, StartRef, EndRef, Res)
+			end;
+		_Msg -> 
+			% io:format("Other: ~p\n", [_Msg]),
+			is_pure_tracer(Pid, StartRef, EndRef, edbc_error)
 	end.

@@ -20,6 +20,9 @@
 % Cut the execution of a function when its exectution time is longer than FUN(). Function FUN can include parameters.
 -define(TIMEOUT(FUN), edbc_timeout() -> FUN).
 
+% An error is raised if the function perform unsafe operations. This is not compatible with EXPECTED_TIME and TIMEOUT because they perform unsafe operations.
+-define(PURE, edbc_pure() -> ok).
+
 % Macro for parameters, e.g. P(1) states for the first parameter.
 -define(P(N), edbc_p(N)).
 

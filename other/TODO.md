@@ -8,6 +8,7 @@ PRE, POST, ...
 - Last two extensions are mutually exclusive. If there is a default value, then there is not sens for an error message, and viceversa. This is automatically dsone by an specific message error.
 
 - decreases for a recursions a -> b -> a -> b
+- One option to do this is by using tracing. Each time a call to the function is detected the check is performed.
 
 - An option to combine both approaches by defining the expected time and the time to cut the execution. It could be called EXPECTED_WITH_TIMEOUT(). It is not clear whether it has sense to have this, as they could be directly combined by definiting two contrats, one of each type, for a function.
 
