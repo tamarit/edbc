@@ -6,9 +6,10 @@ PRE, POST, ...
 - Produce default values instead of an error, i.e. ?PRE(fun.., DefaultValue). An alternative to a different macro is to return {false, {default_value, Value}} in the PRE function.
 - Produce a personalized error message for PREs y POSTs, i.e. ?PRE(fun.., ErrorMsg). An alternative to a specific macro is to return {false, Msg}.
 - Last two extensions are mutually exclusive. If there is a default value, then there is not sens for an error message, and viceversa. This is automatically dsone by an specific message error.
+
 - decreases for a recursions a -> b -> a -> b
-- POST condition that check that the function does not take more than a given time to execute
-- The time controling POST could have 2 versions. One that raises an error when the time is passed and another that cut the execution (using an external process) and raises an error. The second version could be very useful for debugging functions generating infinite loops 
+
+- An option to combine both approaches by defining the expected time and the time to cut the execution. It could be called EXPECTED_WITH_TIMEOUT(). It is not clear whether it has sense to have this, as they could be directly combined by definiting two contrats, one of each type, for a function.
 
 
 GEN_SERVER_CPRE

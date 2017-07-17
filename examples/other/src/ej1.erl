@@ -1,5 +1,5 @@
 -module(ej1).
--export([f/1, g/1, h/2, i/2, f_rec/2]).
+-export([f/1, g/1, h/2, i/2, f_rec/2, f_time/1]).
 
 -include_lib("edbc.hrl").
 
@@ -50,7 +50,8 @@ post_i() ->
     (length(?P(2)) + 1) == length(?R).
 
 
-?DECREASES([?P(1), ?P(2)]).
+% ?DECREASES([?P(1), ?P(2)]).
+?DECREASES(?P(2)).
 ?PRE(fun() -> ?P(1) < ?P(2) end).
 
 % Example of a failing call
@@ -70,6 +71,20 @@ f_rec(M, N) ->
                     f_rec(M, N - 1)
             end
     end.
+
+% Sample of failing predicate
+% ?EXPECTED_TIME(fun() -> length(?P(1)) * 50 end).
+% Sample of correct predicate
+% ?EXPECTED_TIME(fun() -> 20 + (length(?P(1)) * 100) end).
+% Sample of predicate timeouting
+% ?TIMEOUT(fun() -> length(?P(1)) end).
+% Sample of predicate no timeouting
+?TIMEOUT(fun() -> 20 + (length(?P(1)) * 100) end).
+
+% Samle call
+% ej1:f_time(lists:seq(1,10)).
+f_time(L) -> 
+    [timer:sleep(100) || _ <- L].
 
 % pre_f_i(Prev, N = 2) -> 
 %     io:format("Prev: ~p\n", [Prev]),

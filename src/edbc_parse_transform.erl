@@ -74,6 +74,20 @@ search_ebdc_funs(Forms) ->
 									none, 
 									AccInvariants
 								};
+							{edbc_expected_time, 0} -> 
+								{
+									FunGetNewAccForms(PrevFun, AccForms),  
+									[Form | AccPres], 
+									none, 
+									AccInvariants
+								};
+							{edbc_timeout, 0} -> 
+								{
+									FunGetNewAccForms(PrevFun, AccForms),  
+									[Form | AccPres], 
+									none, 
+									AccInvariants
+								};
 							{edbc_post, 0} ->
 								NPrevFun =
 									case PrevFun of 
@@ -243,6 +257,28 @@ build_funs(Forms, EDBC_ON) ->
 												[NewFunction | NewFuns], 
 												ToRemove ++ RemovedFuns
 											};
+										{{edbc_expected_time, 0}, true} -> 
+											{NewFunction, NCurrentForm, RemovedFuns} = 
+												transform_expected_time_function(
+													CurrentForm, 
+													extract_pre_post_fun(ContractFun), 
+													Forms),
+											{
+												NCurrentForm, 
+												[NewFunction | NewFuns], 
+												ToRemove ++ RemovedFuns
+											};
+										{{edbc_timeout, 0}, true} -> 
+											{NewFunction, NCurrentForm, RemovedFuns} = 
+												transform_timeout_function(
+													CurrentForm, 
+													extract_pre_post_fun(ContractFun), 
+													Forms),
+											{
+												NCurrentForm, 
+												[NewFunction | NewFuns], 
+												ToRemove ++ RemovedFuns
+											};
 										{{edbc_post, 0}, true} -> 
 											{NewFunction, NCurrentForm, RemovedFuns} = 
 												transform_post_function(
@@ -305,7 +341,7 @@ remove_funs(Forms, ToRemove) ->
 % PRE/POST transformation
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-transform_pre_post_function(Form, FunOrBody, OtherForms, IsPost) ->
+transform_pre_post_function(Form, FunOrBody, OtherForms, IsPost, LibFunction) ->
 	FormName = 
 		erl_syntax:function_name(Form),
 	NewId = 
@@ -370,10 +406,7 @@ transform_pre_post_function(Form, FunOrBody, OtherForms, IsPost) ->
 		erl_syntax:application(
 			erl_syntax:module_qualifier(
 				erl_syntax:atom(edbc_lib),
-				case IsPost of 
-					true -> erl_syntax:atom(post); 
-					false -> erl_syntax:atom(pre) 
-				end),
+				erl_syntax:atom(LibFunction)),
 				[
 					erl_syntax:fun_expr([
 						erl_syntax:clause(
@@ -398,10 +431,16 @@ transform_pre_post_function(Form, FunOrBody, OtherForms, IsPost) ->
 	{InForm, NForm, FormPostFun}.
 
 transform_pre_function(Form, FunOrBody, OtherForms) ->
-	transform_pre_post_function(Form, FunOrBody, OtherForms, false).
+	transform_pre_post_function(Form, FunOrBody, OtherForms, false, pre).
+
+transform_expected_time_function(Form, FunOrBody, OtherForms) ->
+	transform_pre_post_function(Form, FunOrBody, OtherForms, false, expected_time).
+
+transform_timeout_function(Form, FunOrBody, OtherForms) ->
+	transform_pre_post_function(Form, FunOrBody, OtherForms, false, timeout).
 
 transform_post_function(Form, FunOrBody, OtherForms) ->
-	transform_pre_post_function(Form, FunOrBody, OtherForms, true).
+	transform_pre_post_function(Form, FunOrBody, OtherForms, true, post).
 	
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % DECREASES transformation

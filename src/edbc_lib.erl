@@ -1,5 +1,12 @@
 -module(edbc_lib).
--export([post_invariant/2, decreasing_check/3, pre/2, post/2]).
+-export([
+			post_invariant/2, 
+			decreasing_check/3, 
+			pre/2, 
+			post/2,
+			expected_time/2,
+			timeout/2
+		]).
 
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -75,4 +82,54 @@ post(Post, Call) ->
 			error("The post-condition is not hold.");
 		{false, Msg} -> 
 			error("The post-condition is not hold." ++ Msg)
+	end.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% expected_time/2
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+expected_time(Time, Call) -> 
+	Expected = 
+		Time(),
+	StartTime = 
+		os:timestamp(),
+	Res = Call(),
+	ExeTime = 
+		timer:now_diff(os:timestamp(), StartTime)/1000, % 1000 because now_diff returns microseconds and we wants miliseconds
+	% io:format("ExeTime: ~p\nExpected: ~p\n", [ExeTime, Expected]),
+	case ExeTime < Expected of 
+		true -> 
+			Res;
+		false -> 
+			ErrorMsg = 
+				lists:flatten(
+					io_lib:format(
+						"The execution of the function took too much time\nReal: ~p ms\nExpected: ~p ms\nDifference: ~p ms).\n", 
+						[ExeTime, Expected, ExeTime - Expected])),
+			error(ErrorMsg)
+	end.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% timeout/2
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+timeout(Time, Call) -> 
+	Timeout = 
+		Time(),
+	Self = 
+		self(),
+	MsgRef = 
+		make_ref(),
+	spawn(fun() -> Self!{Call(), MsgRef} end),
+	receive
+		{Res, MsgRef} -> 
+			Res
+	after 
+		Timeout -> 
+			ErrorMsg = 
+				lists:flatten(
+					io_lib:format(
+						"The execution of the function took more time than the expected, i.e. ~p ms.\n", 
+						[Timeout])),
+			error(ErrorMsg)
 	end.
