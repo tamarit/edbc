@@ -163,7 +163,7 @@ is_pure(Call) ->
 							Res0
 					catch
 						E1:E2  ->
-							{edbc_error, {E1, E2}}
+							{edbc_error_call, {E1, E2}}
 					end,
 				Self ! {Res, EndRef}
 			end),
@@ -175,11 +175,13 @@ is_pure(Call) ->
 	case Result of 
 		edbc_error ->
 			error("The function is not pure.");
-		{edbc_error, {error, Reason}} -> 
+		{edbc_error, Msg} ->
+			error("The function is not pure." ++ Msg);
+		{edbc_error_call, {error, Reason}} -> 
 			error(Reason);
-		{edbc_error, {throw, Reason}} -> 
+		{edbc_error_call, {throw, Reason}} -> 
 			throw(Reason);
-		{edbc_error, {exit, Reason}} -> 
+		{edbc_error_call, {exit, Reason}} -> 
 			exit(Reason);
 		Res -> 
 			Res
@@ -199,7 +201,7 @@ is_pure_tracer(Pid, StartRef, EndRef, Res) ->
 					is_pure_tracer(Pid, StartRef, EndRef, FRes);
 				_ -> 
 					case FRes of 
-						{edbc_error, _} -> 
+						{edbc_error_call, _} -> 
 							is_pure_tracer(Pid, StartRef, EndRef, FRes);
 						_ -> 
 							is_pure_tracer(Pid, StartRef, EndRef, Res)
@@ -211,14 +213,28 @@ is_pure_tracer(Pid, StartRef, EndRef, Res) ->
 				true -> 
 					case erl_bifs:is_pure(M, F, Arity) of 
 						false -> 
-							is_pure_tracer(Pid, StartRef, EndRef, edbc_error);
+							InfoMsg = 
+								lists:flatten(
+									io_lib:format(
+										"It has call the unpure BIF ~p:~p/~p", 
+										[M, F, Arity])),
+							is_pure_tracer(Pid, StartRef, EndRef, {edbc_error, InfoMsg});
 						true -> 
 							is_pure_tracer(Pid, StartRef, EndRef, Res)
 					end;
 				false -> 
 					is_pure_tracer(Pid, StartRef, EndRef, Res)
 			end;
-		_Msg -> 
+		{trace, Pid, return_to, _} -> 
+			is_pure_tracer(Pid, StartRef, EndRef, Res);
+		{trace, Pid, return_from, _, _} -> 
+			is_pure_tracer(Pid, StartRef, EndRef, Res);
+		Msg -> 
 			% io:format("Other: ~p\n", [_Msg]),
-			is_pure_tracer(Pid, StartRef, EndRef, edbc_error)
+			InfoMsg = 
+				lists:flatten(
+					io_lib:format(
+						"It has produced the unpure action ~p\n", 
+						[Msg])),
+			is_pure_tracer(Pid, StartRef, EndRef, {edbc_error, InfoMsg})
 	end.

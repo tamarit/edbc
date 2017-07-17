@@ -14,8 +14,6 @@ PRE, POST, ...
 
 - use specs as a precondition
 
-- purity contract
-
 
 GEN_SERVER_CPRE
 ===============

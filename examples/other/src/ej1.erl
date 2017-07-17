@@ -91,10 +91,10 @@ f_pure() ->
     % Detected side-effect operations
     % os:cmd("ls"),
     % io:format("I'm not pure"),
-    spawn(fun() -> ok end),
+    % spawn(fun() -> ok end),
     % self()!hi,
     % dets:open_file(table, []),
-    % ets:new(table, [set]),
+    ets:new(table, [set]),
     % rand:uniform(30),
     % put(r, 1),
     % Not-detected side-effect operations
