@@ -11,6 +11,10 @@ PRE, POST, ...
 
 - An option to combine both approaches by defining the expected time and the time to cut the execution. It could be called EXPECTED_WITH_TIMEOUT(). It is not clear whether it has sense to have this, as they could be directly combined by definiting two contrats, one of each type, for a function.
 
+- use specs as a precondition
+
+- purity contract
+
 
 GEN_SERVER_CPRE
 ===============
@@ -20,6 +24,8 @@ GEN_SERVER_CPRE
 - solve starvation problems using invariants 
 - Is it needed the old state in the invariant function
 - The PRE/POST conditions in the gen_server maybe should make the client fail instead of the server.
+- Extend the same approach to other behaviours using state
+- It is important to note that the client should perform the call using an infinite timeout. Otherwise, 5000 ms is applied by default and it could result in clients which are already dead when the service is provided.
 
 
 
