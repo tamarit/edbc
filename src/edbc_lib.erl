@@ -6,7 +6,10 @@
 			post/2,
 			expected_time/2,
 			timeout/2,
-			is_pure/2
+			is_pure/2,
+			spec_check_pre/2,
+			spec_check_post/2
+			% sheriff_check/2
 		]).
 
 
@@ -238,3 +241,51 @@ is_pure_tracer(Pid, StartRef, EndRef, Res) ->
 						[Msg])),
 			is_pure_tracer(Pid, StartRef, EndRef, {edbc_error, InfoMsg})
 	end.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% spec_check_pre/2
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+spec_check_pre(Pre, Call) -> 
+	case Pre() of 
+		true -> 
+			Call();
+		false -> 
+			error("The spec pre-condition is not hold.");
+		{false, Msg} -> 
+			error("The spec pre-condition is not hold." ++ Msg)
+	end.
+	
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% spec_check_post/2
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+spec_check_post(Post, Call) ->
+	Res =  Call(),
+	case Post(Res) of 
+		true -> 
+			Res;
+		false -> 
+			error("The spec post-condition is not hold.");
+		{false, Msg} -> 
+			error("The spec post-condition is not hold." ++ Msg)
+	end.
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% sheriff_call/2
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% This needs to be inlined
+% sheriff_check(Value, Type) -> 
+% 	case sheriff:check(Value, Type) of
+% 		true -> 
+% 			true;
+% 		false ->
+% 			InfoMsg = 
+% 				lists:flatten(
+% 					io_lib:format(
+% 						"The value ~p is not of type ~p\n", 
+% 						[Value, Type])),
+% 			{false, InfoMsg}
+% 	end.	
+

@@ -12,8 +12,6 @@ PRE, POST, ...
 
 - An option to combine both approaches by defining the expected time and the time to cut the execution. It could be called EXPECTED_WITH_TIMEOUT(). It is not clear whether it has sense to have this, as they could be directly combined by definiting two contrats, one of each type, for a function.
 
-- use specs as a precondition
-
 
 GEN_SERVER_CPRE
 ===============
@@ -31,6 +29,8 @@ GEN_SERVER_CPRE
 Other
 =====
 
+
+- It is important that the reported error give an informative information to detect the source of the error. 
 - Generate edoc from contracts. TRIED: found some problems importing hrl file. 
 - Generate eunit tests from contracts.
 - Generate property tests from contracts.
@@ -50,9 +50,14 @@ Other
 - liquid types
 - liquid session types
 - Add behaviour info as in https://github.com/uwiger/plain_fsm/blob/master/src/plain_fsm.erl 
+- Formally propose extension of Erlang 
+- use rebar or something to ease compilation and load of the environment
+
 
 To see
 ======
 
+
+- https://www.python.org/dev/peps/pep-0316/
 - "Starvation and Critical Race Analyzers for Ada"
 - http://www.rise4fun.com/Dafny/

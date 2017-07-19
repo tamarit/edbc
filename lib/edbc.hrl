@@ -28,10 +28,3 @@
 
 % Macro for the result of a function.
 -define(R, edbc_r()).
-
-
-
-% Not used
-% -define(STATE, state()).
-% -define(PRE2(FUN), -pre(FUN)).
-% -define(PRE_I(FUN), pre(FUN)).

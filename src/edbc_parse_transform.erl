@@ -30,17 +30,29 @@ parse_transform(Forms, Options) ->
 			false -> 
 				Forms
 		end,
-	Form1 = 
+	Forms1 = 
 		search_ebdc_funs(FormsAnnBindings),
-	Form2 = 
-		build_funs(Form1, EDBC_ON),
+	Forms2 = 
+		build_funs(Forms1, EDBC_ON),
 
 	% uncomment to print the pretty-printted version of the code
-	% [io:format("~s\n", [lists:flatten(erl_prettypr:format(F))]) || F <- Form2],
+	% [io:format("~s\n", [lists:flatten(erl_prettypr:format(F))]) || F <- Forms2],
 
 	NewForms = 
-		[erl_syntax:revert(IF) || IF <- Form2],
-	NewForms.
+		[erl_syntax:revert(IF) || IF <- Forms2],
+	try begin
+			code:load_file(sheriff),
+			sheriff:parse_transform(NewForms, Options) 
+		end
+	of
+		SheriffForms ->
+			% io:format("Succeful Sheriff transformation.\n"),
+			SheriffForms
+	catch
+		E1:E2 ->
+			% io:format("Something went wrong.\n~p\n", [{E1, E2}]),
+			replace_calls_to_sheriff(NewForms)
+	end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Annotate contracts 
@@ -135,14 +147,43 @@ search_ebdc_funs(Forms) ->
 									AccInvariants
 								}
 						end;
+					attribute -> 
+						{NAccPres, NAccForms, NPrevFun} = 
+							case erl_syntax:atom_value(erl_syntax:attribute_name(Form)) of 
+								spec -> 
+									try
+										{attribute, _, spec, {_, [{type, _, _, [{type, _, product, ParTypes}, ResType]}]}} = 
+		                          			erl_syntax:revert(Form),
+		                          		ParTypesStr = 
+		                          			[lists:flatten(erl_prettypr:format(ParType)) || ParType <- ParTypes],
+		                          		ResTypeStr = 
+		                          			lists:flatten(erl_prettypr:format(ResType)),
+		                          		{
+		                          				[{spec_pre, {ParId, ParTypeStr}} 
+		                          				|| {ParId, ParTypeStr} <- lists:zip(lists:seq(1, length(ParTypesStr)),ParTypesStr)] 
+		                          			++ 	[{spec_post, ResTypeStr} | AccPres],
+		                          			FunGetNewAccForms(PrevFun, AccForms),
+		                          			none
+		                          		}
+		                          	catch
+		                          		_:_ -> 
+		                          			{AccPres, FunGetNewAccForms(PrevFun, AccForms), none}
+		                          	end;
+								_ -> 
+									{AccPres, [Form | FunGetNewAccForms(PrevFun, AccForms)], none}
+							end,
+						{NAccForms, NAccPres, NPrevFun, AccInvariants};
 					_ ->
-						{[Form | AccForms], AccPres, PrevFun, AccInvariants}
+						NAccForms = 
+							FunGetNewAccForms(PrevFun, AccForms),
+						{[Form | NAccForms], AccPres, none, AccInvariants}
 				end
 			end,
 			{[], [], none, []},
 			Forms),
 	NFForms = 
 		FunGetNewAccForms(FPrevFun, FForms),
+	% Add invariant checks as POST-conditions
 	FunsChangeState = 
 		[
 			{code_change, 3},
@@ -158,8 +199,8 @@ search_ebdc_funs(Forms) ->
 				extract_pre_post_fun(FI),
 			FunInvariant = 
 				erl_syntax:implicit_fun(
-						erl_syntax:atom(FunInvariantName), 
-						erl_syntax:integer(FunInvariantArity)),
+					erl_syntax:atom(FunInvariantName), 
+					erl_syntax:integer(FunInvariantArity)),
 			erl_syntax:function(
 				erl_syntax:atom(edbc_post), 
 				[erl_syntax:clause(
@@ -213,10 +254,25 @@ build_funs(Forms, EDBC_ON) ->
 				case erl_syntax:type(Form0) of 
 					function ->
 						% All functions have an annotation
-						[{PREs, POSTs}] = 
+						[{PREs0, POSTs}] = 
 							erl_syntax:get_ann(Form0),
 						Form = 
 							erl_syntax:set_ann(Form0, []),
+						{PREs, SpecPres, SpecPosts} = 
+							lists:foldl(
+								fun(FormPre, {AccPREs, AccSpecPres, AccSpecPosts}) ->
+									case FormPre of
+										{spec_pre, _} -> 
+											{AccPREs, [FormPre | AccSpecPres], AccSpecPosts};
+										{spec_post, _} -> 
+											{AccPREs, AccSpecPres, [FormPre | AccSpecPosts]};
+										_Other ->
+											% io:format("Other: ~p\n", [_Other]),
+											{[FormPre | AccPREs], AccSpecPres, AccSpecPosts}
+									end
+								end,
+								{[], [], []},
+								PREs0),
 						{PreDec0, PreOther0} = 
 							lists:foldl(
 								fun(FormPre, {AccDec, AccOther}) ->
@@ -252,56 +308,23 @@ build_funs(Forms, EDBC_ON) ->
 						{FForm, NewFuns, NToRemove} = 
 							lists:foldl(
 								fun(ContractFun, {CurrentForm, NewFuns, ToRemove}) -> 
-									case {fun_name_arity(ContractFun),EDBC_ON} of 
-										{{edbc_pre, 0}, true} -> 
+									case ContractFun of 
+										{spec_pre, {ParNum, StrPre}} -> 
 											{NewFunction, NCurrentForm, RemovedFuns} = 
-												transform_pre_function(
+												transform_spec_pre_function(
 													CurrentForm, 
-													extract_pre_post_fun(ContractFun), 
+													[build_call_sheriff(ParNum, StrPre)], 
 													Forms),
 											{
 												NCurrentForm, 
 												[NewFunction | NewFuns], 
 												ToRemove ++ RemovedFuns
 											};
-										{{edbc_expected_time, 0}, true} -> 
+										{spec_post, StrPost} ->
 											{NewFunction, NCurrentForm, RemovedFuns} = 
-												transform_expected_time_function(
+												transform_spec_post_function(
 													CurrentForm, 
-													extract_pre_post_fun(ContractFun), 
-													Forms),
-											{
-												NCurrentForm, 
-												[NewFunction | NewFuns], 
-												ToRemove ++ RemovedFuns
-											};
-										{{edbc_timeout, 0}, true} -> 
-											{NewFunction, NCurrentForm, RemovedFuns} = 
-												transform_timeout_function(
-													CurrentForm, 
-													extract_pre_post_fun(ContractFun), 
-													Forms),
-											{
-												NCurrentForm, 
-												[NewFunction | NewFuns], 
-												ToRemove ++ RemovedFuns
-											};
-										{{edbc_pure, 0}, true} -> 
-											{NewFunction, NCurrentForm, RemovedFuns} = 
-												transform_pure_function(
-													CurrentForm, 
-													[erl_syntax:atom(true)], 
-													Forms),
-											{
-												NCurrentForm, 
-												[NewFunction | NewFuns], 
-												ToRemove ++ RemovedFuns
-											};
-										{{edbc_post, 0}, true} -> 
-											{NewFunction, NCurrentForm, RemovedFuns} = 
-												transform_post_function(
-													CurrentForm, 
-													extract_pre_post_fun(ContractFun), 
+													[build_call_sheriff(res, StrPost)], 
 													Forms),
 											{
 												NCurrentForm, 
@@ -309,19 +332,77 @@ build_funs(Forms, EDBC_ON) ->
 												ToRemove ++ RemovedFuns
 											};
 										_ -> 
-											RemovedFuns = 
-												[search_fun(
-													extract_pre_post_fun(ContractFun),  
-													Forms)],
-											{
-												CurrentForm,
-												NewFuns,
-												ToRemove ++ RemovedFuns
-											}
+											case {fun_name_arity(ContractFun),EDBC_ON} of 
+												{{edbc_pre, 0}, true} -> 
+													{NewFunction, NCurrentForm, RemovedFuns} = 
+														transform_pre_function(
+															CurrentForm, 
+															extract_pre_post_fun(ContractFun), 
+															Forms),
+													{
+														NCurrentForm, 
+														[NewFunction | NewFuns], 
+														ToRemove ++ RemovedFuns
+													};
+												{{edbc_expected_time, 0}, true} -> 
+													{NewFunction, NCurrentForm, RemovedFuns} = 
+														transform_expected_time_function(
+															CurrentForm, 
+															extract_pre_post_fun(ContractFun), 
+															Forms),
+													{
+														NCurrentForm, 
+														[NewFunction | NewFuns], 
+														ToRemove ++ RemovedFuns
+													};
+												{{edbc_timeout, 0}, true} -> 
+													{NewFunction, NCurrentForm, RemovedFuns} = 
+														transform_timeout_function(
+															CurrentForm, 
+															extract_pre_post_fun(ContractFun), 
+															Forms),
+													{
+														NCurrentForm, 
+														[NewFunction | NewFuns], 
+														ToRemove ++ RemovedFuns
+													};
+												{{edbc_pure, 0}, true} -> 
+													{NewFunction, NCurrentForm, RemovedFuns} = 
+														transform_pure_function(
+															CurrentForm, 
+															[erl_syntax:atom(true)], 
+															Forms),
+													{
+														NCurrentForm, 
+														[NewFunction | NewFuns], 
+														ToRemove ++ RemovedFuns
+													};
+												{{edbc_post, 0}, true} -> 
+													{NewFunction, NCurrentForm, RemovedFuns} = 
+														transform_post_function(
+															CurrentForm, 
+															extract_pre_post_fun(ContractFun), 
+															Forms),
+													{
+														NCurrentForm, 
+														[NewFunction | NewFuns], 
+														ToRemove ++ RemovedFuns
+													};
+												_ -> 
+													RemovedFuns = 
+														[search_fun(
+															extract_pre_post_fun(ContractFun),  
+															Forms)],
+													{
+														CurrentForm,
+														NewFuns,
+														ToRemove ++ RemovedFuns
+													}
+											end
 									end
 								end,
 								{NewForm, [], []},
-								PreOther ++ POSTs),
+								PreOther ++ SpecPres ++ POSTs ++ SpecPosts),
 						{[FForm | NewFuns ++ NAcc], ToRemove ++ NToRemove};
 					_ -> 
 						{[Form0 | Acc], ToRemove}
@@ -460,6 +541,12 @@ transform_timeout_function(Form, FunOrBody, OtherForms) ->
 transform_pure_function(Form, FunOrBody, OtherForms) ->
 	transform_pre_post_function(Form, FunOrBody, OtherForms, false, is_pure).
 
+transform_spec_pre_function(Form, FunOrBody, OtherForms) ->
+	transform_pre_post_function(Form, FunOrBody, OtherForms, false, spec_check_pre).
+
+transform_spec_post_function(Form, FunOrBody, OtherForms) ->
+	transform_pre_post_function(Form, FunOrBody, OtherForms, true, spec_check_post).
+
 transform_post_function(Form, FunOrBody, OtherForms) ->
 	transform_pre_post_function(Form, FunOrBody, OtherForms, true, post).
 	
@@ -563,6 +650,103 @@ replace_recursive_calls(Clause, FunctionName, AuxFunctionName, ParNumbers) ->
 			end
 		end,
 		Clause).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% specs and sheriff functions
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+replace_calls_to_sheriff(Forms) -> 
+	lists:map(
+		fun(Form) -> 
+			erl_syntax_lib:map(
+				fun(Node) -> 
+					case erl_syntax:type(Node) of 
+						application -> 
+							Op = erl_syntax:application_operator(Node),
+							case erl_syntax:type(Op) of 
+								module_qualifier -> 
+									{Mod, Fun} = 
+										{
+											erl_syntax:module_qualifier_argument(Node), 
+											erl_syntax:module_qualifier_body(Node)
+										},
+									case {erl_syntax:type(Mod), erl_syntax:type(Fun)} of
+										{atom, atom} -> 
+											case 
+												{
+													erl_syntax:atom_value(Mod), 
+													erl_syntax:atom_value(Fun)
+												}
+											of 
+												{sheriff, check} -> 
+													erl_syntax:atom(true);
+												_ -> 
+													Node
+											end;
+										_ -> 
+											Node
+									end;
+								_ -> 
+									Node
+							end;
+						_ -> 
+							Node 
+					end
+				end,
+				Form)
+		end,
+		Forms).
+
+build_call_sheriff(ParId, SrtType) ->
+	Value = 
+		case ParId of 
+			res -> 
+				erl_syntax:application(
+					erl_syntax:atom(edbc_r),
+					[]);
+			_ -> 
+				erl_syntax:application(
+					erl_syntax:atom(edbc_p),
+					[erl_syntax:integer(ParId)])
+		end,
+	SheriffCall = 
+		erl_syntax:application(
+			erl_syntax:module_qualifier(
+					erl_syntax:atom(sheriff),
+					erl_syntax:atom(check)),
+			[Value, erl_syntax:string(SrtType)]),
+	TrueClause =
+		erl_syntax:clause(
+			[erl_syntax:atom(true)],
+			none,
+			[erl_syntax:atom(true)]),
+	FalseClause =
+		erl_syntax:clause(
+			[erl_syntax:atom(false)],
+			none,
+			[
+				erl_syntax:tuple(
+					[
+						erl_syntax:atom(false),
+						erl_syntax:application(
+							erl_syntax:module_qualifier(
+									erl_syntax:atom(lists),
+									erl_syntax:atom(flatten)),
+							[	
+								erl_syntax:application(
+									erl_syntax:module_qualifier(
+											erl_syntax:atom(io_lib),
+											erl_syntax:atom(format)),
+								[
+									erl_syntax:string("The value ~p is not of type ~p."),
+									erl_syntax:list([Value, erl_syntax:string(SrtType)])
+								])
+							])
+					])
+			]),
+	erl_syntax:case_expr(
+		SheriffCall,
+		[TrueClause, FalseClause]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Common Functions

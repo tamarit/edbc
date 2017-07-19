@@ -1,5 +1,5 @@
 -module(ej1).
--export([f/1, g/1, h/2, i/2, f_rec/2, f_time/1, f_pure/0]).
+-export([f/1, g/1, h/2, i/2, f_rec/2, f_time/1, f_pure/0, f_type/2, start/0]).
 
 -include_lib("edbc.hrl").
 
@@ -80,6 +80,8 @@ f_rec(M, N) ->
 % ?TIMEOUT(fun() -> length(?P(1)) end).
 % Sample of predicate no timeouting
 ?TIMEOUT(fun() -> 20 + (length(?P(1)) * 100) end).
+% -spec f_time(list(any()))  -> list(any()).
+-spec f_time(integer())  -> integer().
 
 % Samle call
 % ej1:f_time(lists:seq(1,10)).
@@ -103,6 +105,22 @@ f_pure() ->
     % 3/0,
     % exit("out"),
     % throw("out"),
+    ok.
+
+% -spec f_type(list(integer()))  -> list(atom()).
+-spec f_type([integer()], integer())  -> [integer()].
+
+f_type(L, X) -> 
+    % case sheriff:check(L, "list(integer())") of 
+    %     true -> 
+    %         [timer:sleep(100) || _ <- L];
+    %     false -> 
+    %         {error, badarg}
+    % end.
+    [length(L) + X | L].
+
+-spec start() -> any().
+start() ->
     ok.
 
 % pre_f_i(Prev, N = 2) -> 
