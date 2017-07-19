@@ -12,22 +12,22 @@ compile:
 # Test cases
 
 run_bridge_fair:
-	@cd examples/bridge/fair;rm -Rf ebin; mkdir ebin; erlc -pa ../../../ebin -I ../../../lib -W0 -o ebin -Dedbc src/*.erl; erl -pa ebin ../../../ebin -run bridge_test test  -noshell  -eval -s erlang halt
+	@cd examples/bridge/fair;rm -Rf ebin; mkdir ebin; erlc -pa ../../../ebin -pa ../../../deps/sheriff/ebin -pa ../../../deps/parse_trans/ebin -I ../../../include -W0 -o ebin -Dedbc src/*.erl; erl -pa ebin ../../../ebin ../../../deps/sheriff/ebin ../../../deps/parse_trans/ebin -run bridge_test test  -noshell  -eval -s erlang halt
 
 run_bridge_unfair:
-	@cd examples/bridge/unfair;rm -Rf ebin; mkdir ebin; erlc -pa ../../../ebin -I ../../../lib -W0 -o ebin -Dedbc src/*.erl; erl -pa ebin ../../../ebin -run bridge_test test  -noshell  -eval -s erlang halt
+	@cd examples/bridge/unfair;rm -Rf ebin; mkdir ebin; erlc -pa ../../../ebin -pa ../../../deps/sheriff/ebin -pa ../../../deps/parse_trans/ebin -I ../../../include -W0 -o ebin -Dedbc src/*.erl; erl -pa ebin ../../../ebin ../../../deps/sheriff/ebin ../../../deps/parse_trans/ebin -run bridge_test test  -noshell  -eval -s erlang halt
 
 load_ej1:
-	@cd examples/other;rm -Rf ebin; mkdir ebin; erlc -pa ../../ebin -pa ../../deps/sheriff/ebin -pa ../../deps/parse_trans/ebin -I ../../lib -W0 -o ebin -Dedbc src/ej1.erl; erl -pa ebin ../../ebin ../../deps/sheriff/ebin ../../deps/parse_trans/ebin
+	@cd examples/other;rm -Rf ebin; mkdir ebin; erlc -pa ../../ebin -pa ../../deps/sheriff/ebin -pa ../../deps/parse_trans/ebin -I ../../include -W0 -o ebin -Dedbc src/ej1.erl; erl -pa ebin ../../ebin ../../deps/sheriff/ebin ../../deps/parse_trans/ebin
 
 run_library:
-	@cd examples/other;rm -Rf ebin; mkdir ebin; erlc -pa ../../ebin -I ../../lib -W0 -o ebin -Dedbc src/library*.erl; erl -pa ebin ../../ebin -run library_test test1  -noshell  -eval -s erlang halt
+	@cd examples/other;rm -Rf ebin; mkdir ebin; erlc -pa ../../ebin -pa ../../deps/sheriff/ebin -pa ../../deps/parse_trans/ebin -I ../../include -W0 -o ebin -Dedbc src/library*.erl; erl -pa ebin ../../ebin ../../deps/sheriff/ebin ../../deps/parse_trans/ebin -run library_test test1  -noshell  -eval -s erlang halt
 
 run_rw_unfair4writers:
-	@cd examples/readers_writers/unfair4writers;rm -Rf ebin; mkdir ebin; erlc -pa ../../../ebin -I ../../../lib -W0 -o ebin -Dedbc src/*.erl; erl -pa ebin ../../../ebin -run readers_writers_test test  -noshell  -eval -s erlang halt
+	@cd examples/readers_writers/unfair4writers;rm -Rf ebin; mkdir ebin; erlc -pa ../../../ebin -pa ../../../deps/sheriff/ebin -pa ../../../deps/parse_trans/ebin -I ../../../include -W0 -o ebin -Dedbc src/*.erl; erl -pa ebin ../../../ebin ../../../deps/sheriff/ebin ../../../deps/parse_trans/ebin -run readers_writers_test test  -noshell  -eval -s erlang halt
 
 run_rw_unfair4readers:
-	@cd examples/readers_writers/unfair4readers;rm -Rf ebin; mkdir ebin; erlc -pa ../../../ebin -I ../../../lib -W0 -o ebin -Dedbc src/*.erl; erl -pa ebin ../../../ebin -run readers_writers_test test  -noshell  -eval -s erlang halt
+	@cd examples/readers_writers/unfair4readers;rm -Rf ebin; mkdir ebin; erlc -pa ../../../ebin -pa ../../../deps/sheriff/ebin -pa ../../../deps/parse_trans/ebin -I ../../../include -W0 -o ebin -Dedbc src/*.erl; erl -pa ebin ../../../ebin ../../../deps/sheriff/ebin ../../../deps/parse_trans/ebin -run readers_writers_test test  -noshell  -eval -s erlang halt
 
 run_rw_fair:
-	@cd examples/readers_writers/fair;rm -Rf ebin; mkdir ebin; erlc -pa ../../../ebin -I ../../../lib -W0 -o ebin -Dedbc src/*.erl; erl -pa ebin ../../../ebin -run readers_writers_test test  -noshell  -eval -s erlang halt
+	@cd examples/readers_writers/fair;rm -Rf ebin; mkdir ebin; erlc -pa ../../../ebin -pa ../../../deps/sheriff/ebin -pa ../../../deps/parse_trans/ebin -I ../../../include -W0 -o ebin -Dedbc src/*.erl; erl -pa ebin ../../../ebin ../../../deps/sheriff/ebin ../../../deps/parse_trans/ebin -run readers_writers_test test  -noshell  -eval -s erlang halt
