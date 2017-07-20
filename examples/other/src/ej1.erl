@@ -3,6 +3,7 @@
 
 -include_lib("edbc.hrl").
 
+
 ?PRE(fun pre_f/0).
 f(0) -> 1;
 f(N) -> 
@@ -30,7 +31,15 @@ i(Elem, List) ->
 ?POST(fun post_i/0).
 
 pre_f() -> 
-	?P(1) >= 0.
+    case ?P(1) >= 0 of 
+        true -> 
+            true;
+        false -> 
+	       {
+                false, 
+                "The first parameter should be greater than or equal to 0."
+            }
+    end.
 
 post_f() -> 
     io:format("f(~p) = ~p\n", [?P(1), ?R]),
@@ -73,7 +82,7 @@ f_rec(M, N) ->
     end.
 
 % Sample of failing predicate
-% ?EXPECTED_TIME(fun() -> length(?P(1)) * 50 end).
+?EXPECTED_TIME(fun() -> length(?P(1)) * 50 end).
 % Sample of correct predicate
 % ?EXPECTED_TIME(fun() -> 20 + (length(?P(1)) * 100) end).
 % Sample of predicate timeouting
@@ -96,13 +105,13 @@ f_pure() ->
     % spawn(fun() -> ok end),
     % self()!hi,
     % dets:open_file(table, []),
-    ets:new(table, [set]),
+    % ets:new(table, [set]),
     % rand:uniform(30),
     % put(r, 1),
     % Not-detected side-effect operations
     % get(r),
     % This exits are reported as they are (they are not affected by the tracing). However, the tracestack is lost.
-    % 3/0,
+    3/0,
     % exit("out"),
     % throw("out"),
     ok.

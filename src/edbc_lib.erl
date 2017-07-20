@@ -54,9 +54,9 @@ decreasing_check(NewValues, OldValues, F) ->
 		true -> 
 			F();
 		false -> 
-			error("Decreasing condition does not hold.");
+			error({"Decreasing condition does not hold.", get_stacktrace()});
 		{false, Msg} -> 
-			error("Decreasing condition does not hold." ++ Msg)
+			error({"Decreasing condition does not hold." ++ Msg, get_stacktrace()})
 	end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -68,9 +68,9 @@ pre(Pre, Call) ->
 		true -> 
 			Call();
 		false -> 
-			error("The pre-condition is not hold.");
+			error({"The pre-condition is not hold.", get_stacktrace()});
 		{false, Msg} -> 
-			error("The pre-condition is not hold." ++ Msg)
+			error({"The pre-condition is not hold." ++ Msg, get_stacktrace()})
 	end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -83,9 +83,9 @@ post(Post, Call) ->
 		true -> 
 			Res;
 		false -> 
-			error("The post-condition is not hold.");
+			error({"The post-condition is not hold.", get_stacktrace()});
 		{false, Msg} -> 
-			error("The post-condition is not hold." ++ Msg)
+			error({"The post-condition is not hold." ++ Msg, get_stacktrace()})
 	end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -110,7 +110,7 @@ expected_time(Time, Call) ->
 					io_lib:format(
 						"The execution of the function took too much time\nReal: ~p ms\nExpected: ~p ms\nDifference: ~p ms).\n", 
 						[ExeTime, Expected, ExeTime - Expected])),
-			error(ErrorMsg)
+			error({ErrorMsg, get_stacktrace()})
 	end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -133,9 +133,9 @@ timeout(Time, Call) ->
 			ErrorMsg = 
 				lists:flatten(
 					io_lib:format(
-						"The execution of the function took more time than the expected, i.e. ~p ms.\n", 
+						"The execution of the function has been stopped because it took more time than the expected, i.e. ~p ms.\n", 
 						[Timeout])),
-			error(ErrorMsg)
+			error({ErrorMsg, get_stacktrace()})
 	end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -177,15 +177,15 @@ is_pure(Call) ->
 		is_pure_tracer(Pid, StartRef, EndRef, none),
 	case Result of 
 		edbc_error ->
-			error("The function is not pure.");
+			error({"The function is not pure.",get_stacktrace()});
 		{edbc_error, Msg} ->
-			error("The function is not pure." ++ Msg);
+			error({"The function is not pure." ++ Msg, get_stacktrace()});
 		{edbc_error_call, {error, Reason}} -> 
-			error(Reason);
+			error({Reason, get_stacktrace()});
 		{edbc_error_call, {throw, Reason}} -> 
-			throw(Reason);
+			throw({Reason, get_stacktrace()});
 		{edbc_error_call, {exit, Reason}} -> 
-			exit(Reason);
+			exit({Reason, get_stacktrace()});
 		Res -> 
 			Res
 	end.
@@ -251,9 +251,9 @@ spec_check_pre(Pre, Call) ->
 		true -> 
 			Call();
 		false -> 
-			error("The spec pre-condition is not hold.");
+			error({"The spec pre-condition is not hold.", get_stacktrace()});
 		{false, Msg} -> 
-			error("The spec pre-condition is not hold." ++ Msg)
+			error({"The spec pre-condition is not hold." ++ Msg, get_stacktrace()})
 	end.
 	
 
@@ -267,9 +267,9 @@ spec_check_post(Post, Call) ->
 		true -> 
 			Res;
 		false -> 
-			error("The spec post-condition is not hold.");
+			error({"The spec post-condition is not hold.", get_stacktrace()});
 		{false, Msg} -> 
-			error("The spec post-condition is not hold." ++ Msg)
+			error({"The spec post-condition is not hold." ++ Msg, get_stacktrace()})
 	end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -288,4 +288,7 @@ spec_check_post(Post, Call) ->
 % 						[Value, Type])),
 % 			{false, InfoMsg}
 % 	end.	
+
+get_stacktrace() ->
+	tl(try throw(42) catch 42 -> erlang:get_stacktrace() end).
 
