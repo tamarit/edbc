@@ -32,7 +32,7 @@ parse_transform(Forms, Options) ->
 				Forms
 		end,
 	Forms1 = 
-		search_ebdc_funs(FormsAnnBindings),
+		search_edbc_funs(FormsAnnBindings),
 	Forms2 = 
 		build_funs(Forms1, EDBC_ON),
 
@@ -64,7 +64,7 @@ print_clean_code(SourceFile, IncludeDirs) ->
 	{ok, Forms} = 
 		epp:parse_file(SourceFile, IncludeDirs, []),
 	Forms1 = 
-		search_ebdc_funs(Forms),
+		search_edbc_funs(Forms),
 	Forms2 = 
 		build_funs(Forms1, false),
 	[io:format("~s\n", [lists:flatten(erl_prettypr:format(F))]) || F <- Forms2],
@@ -87,7 +87,7 @@ print_clean_code(SourceFile, IncludeDirs, OutputFile) ->
 	Forms = 
 		Forms0,
 	Forms1 = 
-		search_ebdc_funs(Forms),
+		search_edbc_funs(Forms),
 	Forms2_0 = 
 		build_funs(Forms1, false, true),
 	Forms2_1 = 
@@ -124,7 +124,7 @@ print_clean_code(SourceFile, IncludeDirs, OutputFile) ->
 % Annotate contracts 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-search_ebdc_funs(Forms) ->
+search_edbc_funs(Forms) ->
 	FunGetNewAccForms = 
 		fun
 			(none, AccForms) -> 
@@ -870,34 +870,52 @@ edoc_contract({{edbc_decreases, 0}, ParNumbers}) ->
 edoc_contract({{edbc_pure, 0}, _}) -> 
 	[" <b>PURE</b> function."];
 edoc_contract({{edbc_pre, 0}, Body}) ->
-	[
-		" <b>PRE: </b>"
-	]
+	[" <b>PRE: </b>"]
 	++ build_pp_lines(Body);
-edoc_contract({{edbc_post, 0}, _}) -> 
-	[" <b>POST: </b>"];
-edoc_contract({{edbc_expected_time, 0}, _}) -> 
-	[" <b>EXPECTED TIME: </b>"];
-edoc_contract({{edbc_timeout, 0}, _}) -> 
-	[" <b>TIMEOUT: </b>"];
+edoc_contract({{edbc_post, 0}, Body}) -> 
+	[" <b>POST: </b>"]
+	++ build_pp_lines(Body);
+edoc_contract({{edbc_expected_time, 0}, Body}) -> 
+	[" <b>EXPECTED TIME: </b>"]
+	++ build_pp_lines(Body);
+edoc_contract({{edbc_timeout, 0}, Body}) -> 
+	[" <b>TIMEOUT: </b>"]
+	++ build_pp_lines(Body);
 edoc_contract({_, _}) -> 
 	[].
 
 build_pp_lines(Body) -> 
-	PrettyBody = 
-		[lists:flatten(
-			% io_lib:format("~p", [Body])), 
-			erl_prettypr:format(E)) 
+	PrettyBody0 = 
+		[change_p_res(
+			lists:flatten(
+				% io_lib:format("~p", [Body])), 
+				erl_prettypr:format(E))) 
 		|| E <- Body], 
+	PrettyBody = 
+		append_commas_dot(PrettyBody0),
 	Lines = 
-		[lists:concat(["```" ++ change_p_res(T) ++ "'''" || T <- string:tokens(PE, "\n")])
+		[lists:concat(["```" ++ T ++ "'''" || T <- string:tokens(PE, "\n")])
 		|| PE <- PrettyBody],
-	% io:format("Lines: ~p\n", [lists:concat(Lines)]),
 	Lines.
 
 change_p_res(Str) ->
-	Str.
-% 	case string:find()
+	Str1 = string:replace(Str, "edbc_p", "?P"),
+	Str2 = string:replace(lists:concat(Str1), "edbc_r", "?R"),
+	Str3 = lists:concat(Str2),
+	% io:format("Str3: ~p\n", [Str3]),
+	case Str3 == Str of 
+		true -> 
+			Str;
+		false -> 
+			change_p_res(Str3)
+	end.
+
+append_commas_dot([]) -> 
+	["."];
+append_commas_dot([Line]) -> 
+	[Line ++ "."];
+append_commas_dot([Line | Lines]) -> 
+	[(Line ++ ",") | append_commas_dot(Lines)].
 
 join_edoc_info(Lines) -> 
 	{NewLines, _, _} =
