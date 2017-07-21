@@ -63,6 +63,8 @@ post_i() ->
 ?DECREASES(?P(2)).
 ?PRE(fun() -> ?P(1) < ?P(2) end).
 
+%% @doc This is a <em>very</em> useful function.
+
 % Example of a failing call
 % ej1:f_rec(1,4). 
 f_rec(M, N) -> 
@@ -81,6 +83,13 @@ f_rec(M, N) ->
             end
     end.
 
+%% @doc This is a <em>very</em> useful function.
+%%  
+%% 
+%% Intersting
+%% Function
+
+
 % Sample of failing predicate
 ?EXPECTED_TIME(fun() -> length(?P(1)) * 50 end).
 % Sample of correct predicate
@@ -92,10 +101,14 @@ f_rec(M, N) ->
 % -spec f_time(list(any()))  -> list(any()).
 -spec f_time(integer())  -> integer().
 
+
 % Samle call
 % ej1:f_time(lists:seq(1,10)).
 f_time(L) -> 
     [timer:sleep(100) || _ <- L].
+
+
+%% @doc This is a <em>very</em> useful function.
 
 ?PURE.
 f_pure() -> 
@@ -118,6 +131,7 @@ f_pure() ->
 
 % -spec f_type(list(integer()))  -> list(atom()).
 -spec f_type([integer()], integer())  -> [integer()].
+%% @doc This is a <em>very</em> useful function.
 
 f_type(L, X) -> 
     % case sheriff:check(L, "list(integer())") of 
@@ -128,7 +142,7 @@ f_type(L, X) ->
     % end.
     [length(L) + X | L].
 
--spec start() -> any().
+-spec start() -> atom().
 start() ->
     ok.
 

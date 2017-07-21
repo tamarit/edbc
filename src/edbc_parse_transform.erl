@@ -1,6 +1,7 @@
 -module(edbc_parse_transform).
--export([parse_transform/2]).
+-export([parse_transform/2, print_clean_code/2, print_clean_code/3]).
 
+-include_lib("xmerl/include/xmerl.hrl").
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % parse_transform
@@ -40,19 +41,84 @@ parse_transform(Forms, Options) ->
 
 	NewForms = 
 		[erl_syntax:revert(IF) || IF <- Forms2],
-	try begin
-			code:load_file(sheriff),
-			sheriff:parse_transform(NewForms, Options) 
-		end
-	of
-		SheriffForms ->
-			% io:format("Succeful Sheriff transformation.\n"),
-			SheriffForms
-	catch
-		E1:E2 ->
-			% io:format("Something went wrong.\n~p\n", [{E1, E2}]),
-			replace_calls_to_sheriff(NewForms)
+	case EDBC_ON of 
+		true -> 
+			try begin
+					code:load_file(sheriff),
+					sheriff:parse_transform(NewForms, Options) 
+				end
+			of
+				SheriffForms ->
+					% io:format("Succeful Sheriff transformation.\n"),
+					SheriffForms
+			catch
+				E1:E2 ->
+					% io:format("Something went wrong.\n~p\n", [{E1, E2}]),
+					replace_calls_to_sheriff(NewForms)
+			end;
+		false -> 
+			NewForms
 	end.
+
+print_clean_code(SourceFile, IncludeDirs) ->
+	{ok, Forms} = 
+		epp:parse_file(SourceFile, IncludeDirs, []),
+	Forms1 = 
+		search_ebdc_funs(Forms),
+	Forms2 = 
+		build_funs(Forms1, false),
+	[io:format("~s\n", [lists:flatten(erl_prettypr:format(F))]) || F <- Forms2],
+	ok.
+
+print_clean_code(SourceFile, IncludeDirs, OutputFile) ->
+	{ok, Forms0} = 
+		epp:parse_file(SourceFile, IncludeDirs, []),
+	Comments = 
+		erl_comment_scan:file(SourceFile),
+	% Forms0_1 = 
+	% 	Forms0,
+	% % io:format("Forms0_2: ~p\n", [erl_syntax:type(Forms0_1)]),
+	% Forms0_2 = 
+	% 	erl_recomment:recomment_forms(Forms0_1, Comments),
+	% % io:format("Forms0_2: ~p\n", [Forms0_2]),
+	% io:format("Forms0_2: ~p\n", [Forms0_2]),
+	% Forms = 
+	% 	erl_syntax:form_list_elements(Forms0_2),
+	Forms = 
+		Forms0,
+	Forms1 = 
+		search_ebdc_funs(Forms),
+	Forms2_0 = 
+		build_funs(Forms1, false, true),
+	Forms2_1 = 
+		erl_recomment:recomment_forms(Forms2_0, Comments),
+	% io:format("Forms2_1: ~p\n", [Forms2_1]),
+	Forms2 = 
+		erl_syntax:form_list_elements(Forms2_1),
+	% Forms2 = 
+	% 	Forms2_0,
+	% io:format("Forms2: ~p\n", [Forms2]),
+	{ok, IOD} = 
+		file:open(OutputFile, [write]),
+	[
+		file:write(
+			IOD, 
+			lists:flatten(erl_prettypr:format(F)++ "\n")) 
+		|| F <- Forms2
+	],
+	file:close(IOD),
+	{ok, Binary} = 
+		file:read_file(OutputFile),
+	BinLines = 
+		binary:split(Binary, [<<"\n">>], [global]),
+    Lines = 
+    	[binary_to_list(BL) || BL <- BinLines],
+    NLines = 
+    	join_edoc_info(Lines),
+    file:write_file(
+    	OutputFile, 
+    	list_to_binary(lists:join($\n, NLines))),
+	ok.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Annotate contracts 
@@ -162,12 +228,12 @@ search_ebdc_funs(Forms) ->
 		                          				[{spec_pre, {ParId, ParTypeStr}} 
 		                          				|| {ParId, ParTypeStr} <- lists:zip(lists:seq(1, length(ParTypesStr)),ParTypesStr)] 
 		                          			++ 	[{spec_post, ResTypeStr} | AccPres],
-		                          			FunGetNewAccForms(PrevFun, AccForms),
+		                          			[Form | FunGetNewAccForms(PrevFun, AccForms)],
 		                          			none
 		                          		}
 		                          	catch
 		                          		_:_ -> 
-		                          			{AccPres, FunGetNewAccForms(PrevFun, AccForms), none}
+		                          			{AccPres, [Form | FunGetNewAccForms(PrevFun, AccForms)], none}
 		                          	end;
 								_ -> 
 									{AccPres, [Form | FunGetNewAccForms(PrevFun, AccForms)], none}
@@ -248,6 +314,9 @@ search_ebdc_funs(Forms) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 build_funs(Forms, EDBC_ON) -> 
+	build_funs(Forms, EDBC_ON, false).
+
+build_funs(Forms, EDBC_ON, EDocGen) -> 
 	{NForms0, ToRemove0} = 
 		lists:foldl(
 			fun(Form0, {Acc, ToRemove}) -> 
@@ -299,17 +368,24 @@ build_funs(Forms, EDBC_ON) ->
 										NewForm0,
 										[AuxFun | Acc]
 									};
-								_ ->
+								{[PreDecFun | _], false} ->
+									ParNumber = 
+										extract_decrease_paramenter(PreDecFun),
 									{
-										Form, 
+										gen_edoc(Form, EDocGen, {decrease, ParNumber}), 
+										Acc
+									};
+								_ -> 
+									{
+										Form,
 										Acc
 									}
 							end,
 						{FForm, NewFuns, NToRemove} = 
 							lists:foldl(
 								fun(ContractFun, {CurrentForm, NewFuns, ToRemove}) -> 
-									case ContractFun of 
-										{spec_pre, {ParNum, StrPre}} -> 
+									case {ContractFun, EDBC_ON} of 
+										{{spec_pre, {ParNum, StrPre}}, true} -> 
 											{NewFunction, NCurrentForm, RemovedFuns} = 
 												transform_spec_pre_function(
 													CurrentForm, 
@@ -320,7 +396,7 @@ build_funs(Forms, EDBC_ON) ->
 												[NewFunction | NewFuns], 
 												ToRemove ++ RemovedFuns
 											};
-										{spec_post, StrPost} ->
+										{{spec_post, StrPost}, true} ->
 											{NewFunction, NCurrentForm, RemovedFuns} = 
 												transform_spec_post_function(
 													CurrentForm, 
@@ -330,6 +406,12 @@ build_funs(Forms, EDBC_ON) ->
 												NCurrentForm, 
 												[NewFunction | NewFuns], 
 												ToRemove ++ RemovedFuns
+											};
+										{{_, _}, false} -> 
+											{
+												CurrentForm,
+												NewFuns,
+												ToRemove
 											};
 										_ -> 
 											case {fun_name_arity(ContractFun),EDBC_ON} of 
@@ -373,7 +455,7 @@ build_funs(Forms, EDBC_ON) ->
 															[erl_syntax:atom(true)], 
 															Forms),
 													{
-														NCurrentForm, 
+														NCurrentForm,
 														[NewFunction | NewFuns], 
 														ToRemove ++ RemovedFuns
 													};
@@ -388,13 +470,28 @@ build_funs(Forms, EDBC_ON) ->
 														[NewFunction | NewFuns], 
 														ToRemove ++ RemovedFuns
 													};
-												_ -> 
-													RemovedFuns = 
+												{FunArity, false} ->
+													NCurrentForm = 
+														case FunArity of 
+															{edbc_pure, 0} -> 
+																gen_edoc(CurrentForm, EDocGen, is_pure);
+															_ -> 
+																CurrentForm
+														end,
+													% io:format("ContractFun: ~p\n", [ContractFun]),
+													RemovedFuns0 = 
 														[search_fun(
 															extract_pre_post_fun(ContractFun),  
 															Forms)],
+													RemovedFuns = 
+														case RemovedFuns0 of 
+															[not_found] -> 
+																[];
+															_ -> 
+																RemovedFuns0
+														end,
 													{
-														CurrentForm,
+														NCurrentForm,
 														NewFuns,
 														ToRemove ++ RemovedFuns
 													}
@@ -665,6 +762,7 @@ replace_calls_to_sheriff(Forms) ->
 							Op = erl_syntax:application_operator(Node),
 							case erl_syntax:type(Op) of 
 								module_qualifier -> 
+									io:format("Op: ~p\n", [Op]),
 									{Mod, Fun} = 
 										{
 											erl_syntax:module_qualifier_argument(Node), 
@@ -749,6 +847,111 @@ build_call_sheriff(ParId, SrtType) ->
 		[TrueClause, FalseClause]).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% edoc generation
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+gen_edoc(Form, false, _) -> 
+	Form;
+gen_edoc(Form, true, Contract) -> 
+	ContractStr = 
+		edoc_contract(Contract),
+	NComment = 
+		erl_syntax:comment(
+				[" @doc "] 
+			++ 	ContractStr 
+			++ 	["\n\n"]),
+	erl_syntax:set_precomments(
+		Form, 
+		erl_syntax:get_precomments(Form) ++ [NComment]).
+
+edoc_contract({decrease, ParNumbers}) -> 
+	[
+			" <b>DECREASES:</b> The parameter number " 
+		++ 	integer_to_list(ParNumber) 
+		++ 	"." 
+	|| 
+		ParNumber <- ParNumbers
+	];
+edoc_contract(is_pure) -> 
+	[" <b>PURE</b> function."].
+
+join_edoc_info(Lines) -> 
+	{NewLines, _, _} =
+		lists:foldl(
+			fun(Line, {AccLines, AccDoc, InDoc}) -> 
+				Cleaned = 
+					string:trim(Line),
+				RemovedLeadingCommentMarks = 
+					string:trim(Cleaned, leading, "%"),
+				NewCleaned = 
+					string:trim(RemovedLeadingCommentMarks),
+				case string:find(NewCleaned, "@doc") of 
+					nomatch ->
+						case Cleaned == NewCleaned of 
+							true -> % It is not a comment
+								case Cleaned of 
+									[] -> 
+										{
+											[Line | AccLines],
+											AccDoc,
+											false
+										};
+									_ ->
+										case string:str(NewCleaned, "-") of 
+											1 -> % It is an attribute or other
+												{
+													[Line | AccLines],
+													AccDoc,
+													false
+												};
+											_ -> % It could be a function
+												{
+													[Line | AccDoc ++ AccLines],
+													[],
+													false
+												}											
+										end
+								end;
+							false -> % It is a comment
+								case InDoc of 
+									true -> 
+										{
+											AccLines,
+											[Line | AccDoc],
+											InDoc
+										};
+									false -> 
+										{										
+											[Line | AccLines],
+											AccDoc,
+											InDoc
+										}
+								end
+						end;
+					RestStr -> % has a @doc annotation
+						case  AccDoc of 
+							[_|_] ->
+								Sliced = 
+									string:slice(RestStr, 4, length(RestStr)),
+								{
+									AccLines,
+									[[$% | Sliced] | AccDoc],
+									true	
+								};
+							[] -> 
+								{
+									AccLines,
+									[Line | AccDoc],
+									true
+								}
+						end
+				end
+			end,
+			{[], [], false},
+			Lines),
+	lists:reverse(NewLines).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % Common Functions
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
@@ -756,6 +959,7 @@ extract_pre_post_fun(Form) ->
 	BodyForm = 
 		hd(erl_syntax:clause_body(
 			hd(erl_syntax:function_clauses(Form)))),
+	% io:format("BodyForm: ~p\n", [BodyForm]),
 	case erl_syntax:type(BodyForm) of 
 		fun_expr ->  
 			BodyFun = 
@@ -771,7 +975,9 @@ extract_pre_post_fun(Form) ->
 			ArityPreFun = 
 				erl_syntax:integer_value(
 					erl_syntax:arity_qualifier_argument(OpPreFun)),
-			{NamePreFun, ArityPreFun}
+			{NamePreFun, ArityPreFun};
+		_ -> 
+			none
 	end.
 
 extract_decrease_paramenter(Form) -> 
@@ -937,3 +1143,74 @@ get_free_id(Atom) ->
 		Value ->
 			Value
 	end. 
+
+
+% gen_edoc(Form, false, _) -> 
+% 	Form;
+% gen_edoc(Form, true, Contract) -> 
+% 	ContractStr = 
+% 		edoc_contract(Contract),
+% 	case erl_syntax:get_precomments(Form) of 
+% 		[] ->
+% 			erl_syntax:set_precomments(
+% 				Form, 
+% 				[erl_syntax:comment(["@doc "] ++ ContractStr ++ [".\n"])]);
+% 		List -> 
+% 			{NList0, IsSet} = 
+% 				lists:mapfoldl(
+% 					fun
+% 						(Comm, true) ->
+% 							{Comm, true};
+% 						(Comm, false) -> 
+% 							Strs = 
+% 								erl_syntax:comment_text(Comm),
+% 							HasDoc = 
+% 								lists:foldl(
+% 									fun
+% 										(_, true) -> 
+% 											true;
+% 										(Str, Acc) -> 
+% 											case string:str(Str, "@doc") of 
+% 												0 -> 
+% 													false;
+% 												_ -> 
+% 													true
+% 											end
+% 									end,
+% 									false,
+% 									Strs),
+% 							NStrs = 
+% 								case HasDoc of 
+% 									true ->
+% 										Strs ++ ContractStr;
+% 									false -> 
+% 										Strs
+% 								end,
+% 							{
+% 								erl_syntax:copy_pos(
+% 									Comm, 
+% 									erl_syntax:comment(
+% 										NStrs, 
+% 										erl_syntax:comment_padding(Comm))), 
+% 								HasDoc
+% 							}
+% 					end,
+% 					false,
+% 					List),
+% 			NList = 
+% 				case IsSet of 
+% 					true -> 
+% 						NList0;
+% 					false -> 
+% 						NComment = 
+% 							erl_syntax:comment(
+% 									["@doc "] 
+% 								++ 	ContractStr 
+% 								++ 	[".\n"]),
+% 							NList0 
+% 						++ 	[erl_syntax:copy_pos(Form, NComment)]
+% 				end,
+% 			erl_syntax:set_precomments(
+% 				Form, 
+% 				NList)
+% 	end.
