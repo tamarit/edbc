@@ -372,7 +372,7 @@ build_funs(Forms, EDBC_ON, EDocGen) ->
 									ParNumber = 
 										extract_decrease_paramenter(PreDecFun),
 									{
-										gen_edoc(Form, EDocGen, {decrease, ParNumber}), 
+										gen_edoc(Form, EDocGen, {{edbc_decreases, 0}, ParNumber}), 
 										Acc
 									};
 								_ -> 
@@ -471,25 +471,20 @@ build_funs(Forms, EDBC_ON, EDocGen) ->
 														ToRemove ++ RemovedFuns
 													};
 												{FunArity, false} ->
+													{RemovedFuns, Body} = 
+														case extract_pre_post_fun(ContractFun) of 
+															{NamePreFun, ArityPreFun} -> 
+																FormFun = 
+																	search_fun({NamePreFun, ArityPreFun}, Forms),
+																BodyFormFun = 
+																	erl_syntax:clause_body(
+																		hd(erl_syntax:function_clauses(FormFun))),
+																{[FormFun], BodyFormFun};
+															Body0 -> 
+																{[], Body0}
+														end,
 													NCurrentForm = 
-														case FunArity of 
-															{edbc_pure, 0} -> 
-																gen_edoc(CurrentForm, EDocGen, is_pure);
-															_ -> 
-																CurrentForm
-														end,
-													% io:format("ContractFun: ~p\n", [ContractFun]),
-													RemovedFuns0 = 
-														[search_fun(
-															extract_pre_post_fun(ContractFun),  
-															Forms)],
-													RemovedFuns = 
-														case RemovedFuns0 of 
-															[not_found] -> 
-																[];
-															_ -> 
-																RemovedFuns0
-														end,
+														gen_edoc(CurrentForm, EDocGen, {FunArity, Body}),
 													{
 														NCurrentForm,
 														NewFuns,
@@ -864,7 +859,7 @@ gen_edoc(Form, true, Contract) ->
 		Form, 
 		erl_syntax:get_precomments(Form) ++ [NComment]).
 
-edoc_contract({decrease, ParNumbers}) -> 
+edoc_contract({{edbc_decreases, 0}, ParNumbers}) -> 
 	[
 			" <b>DECREASES:</b> The parameter number " 
 		++ 	integer_to_list(ParNumber) 
@@ -872,8 +867,18 @@ edoc_contract({decrease, ParNumbers}) ->
 	|| 
 		ParNumber <- ParNumbers
 	];
-edoc_contract(is_pure) -> 
-	[" <b>PURE</b> function."].
+edoc_contract({{edbc_pure, 0}, _}) -> 
+	[" <b>PURE</b> function."];
+edoc_contract({{edbc_pre, 0}, _}) -> 
+	[" <b>PRE: </b>"];
+edoc_contract({{edbc_post, 0}, _}) -> 
+	[" <b>POST: </b>"];
+edoc_contract({{edbc_expected_time, 0}, _}) -> 
+	[" <b>EXPECTED TIME: </b>"];
+edoc_contract({{edbc_timeout, 0}, _}) -> 
+	[" <b>TIMEOUT: </b>"];
+edoc_contract({_, _}) -> 
+	[].
 
 join_edoc_info(Lines) -> 
 	{NewLines, _, _} =
