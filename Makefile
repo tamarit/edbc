@@ -40,12 +40,7 @@ load_ej1_noedbc:
 	erl -pa ebin ../../ebin ../../deps/sheriff/ebin ../../deps/parse_trans/ebin
 
 doc_ej1:
-	@cd examples/other;\
-	rm -Rf ebin;\
-	mkdir ebin;\
-	erlc -pa ../../ebin -pa ../../deps/sheriff/ebin -pa ../../deps/parse_trans/ebin -I ../../include -W0 -o ebin src/ej1.erl;\
-	cd ../../;\
-	erl -pa ebin deps/sheriff/ebin deps/parse_trans/ebin -eval 'edbc_parse_transform:print_clean_code("examples/other/src/ej1.erl", ["include"], "examples/other/ej1.erl")' -noshell  -eval -s erlang halt;\
+	@erl -pa ebin deps/sheriff/ebin deps/parse_trans/ebin -eval 'edbc_parse_transform:print_clean_code("examples/other/src/ej1.erl", ["include"], "examples/other/ej1.erl")' -noshell  -eval -s erlang halt;\
 	erl -run edoc_run files '["examples/other/ej1.erl"]' '[{dir, "examples/other/docs"}]' -noshell -eval -s erlang halt;\
 	rm -rf examples/other/ej1.erl
 
