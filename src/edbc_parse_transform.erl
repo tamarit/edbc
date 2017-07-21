@@ -117,7 +117,7 @@ print_clean_code(SourceFile, IncludeDirs, OutputFile) ->
     	join_edoc_info(Lines),
     file:write_file(
     	OutputFile, 
-    	list_to_binary(lists:join($\n, NLines))),
+    	list_to_binary(string:join(NLines, "\n"))),
 	ok.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -869,8 +869,11 @@ edoc_contract({{edbc_decreases, 0}, ParNumbers}) ->
 	];
 edoc_contract({{edbc_pure, 0}, _}) -> 
 	[" <b>PURE</b> function."];
-edoc_contract({{edbc_pre, 0}, _}) -> 
-	[" <b>PRE: </b>"];
+edoc_contract({{edbc_pre, 0}, Body}) ->
+	[
+		" <b>PRE: </b>"
+	]
+	++ build_pp_lines(Body);
 edoc_contract({{edbc_post, 0}, _}) -> 
 	[" <b>POST: </b>"];
 edoc_contract({{edbc_expected_time, 0}, _}) -> 
@@ -879,6 +882,22 @@ edoc_contract({{edbc_timeout, 0}, _}) ->
 	[" <b>TIMEOUT: </b>"];
 edoc_contract({_, _}) -> 
 	[].
+
+build_pp_lines(Body) -> 
+	PrettyBody = 
+		[lists:flatten(
+			% io_lib:format("~p", [Body])), 
+			erl_prettypr:format(E)) 
+		|| E <- Body], 
+	Lines = 
+		[lists:concat(["```" ++ change_p_res(T) ++ "'''" || T <- string:tokens(PE, "\n")])
+		|| PE <- PrettyBody],
+	% io:format("Lines: ~p\n", [lists:concat(Lines)]),
+	Lines.
+
+change_p_res(Str) ->
+	Str.
+% 	case string:find()
 
 join_edoc_info(Lines) -> 
 	{NewLines, _, _} =
