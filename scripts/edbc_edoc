@@ -9,15 +9,21 @@ then
 	echo -e "Usage:\n\tedbc_edoc FILE EDOC_DIR"
 else
 	filename=$(basename $1)
-	if [ "${DIR:0:1}" = "/" ]
+	if [ "${1:0:1}" = "/" ]
 	then
 		file_path=$1
 	else
 		file_path="$current_path/$1"
 	fi
+	if [ "${2:0:1}" = "/" ]
+	then
+		doc_dir=$2
+	else
+		doc_dir="$current_path/$2"
+	fi
 	mkdir "$edbc_path/temp"
 	erl -pa "$edbc_path/ebin" "$edbc_path/deps/sheriff/ebin" "$edbc_path/deps/parse_trans/ebin" -eval 'edbc_parse_transform:print_clean_code("'${file_path}'", ["'$edbc_path'/include"], "'$edbc_path'/temp/'${filename}'")' -noshell  -eval -s erlang halt
-	erl -run edoc_run files '["'$edbc_path'/temp/'$filename'"]' '[{dir, "'${2}'"}]' -noshell -eval -s erlang halt
+	erl -run edoc_run files '["'$edbc_path'/temp/'$filename'"]' '[{dir, "'$doc_dir'"}]' -noshell -eval -s erlang halt
 	rm -rf "$edbc_path/temp"
 fi
 
