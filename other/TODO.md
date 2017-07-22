@@ -10,7 +10,6 @@ PRE, POST, ...
 - decreases for a recursions a -> b -> a -> b
 - One option to do this is by using tracing. Each time a call to the function is detected the check is performed.
 
-- An option to combine both approaches by defining the expected time and the time to cut the execution. It could be called EXPECTED_WITH_TIMEOUT(). It is not clear whether it has sense to have this, as they could be directly combined by definiting two contrats, one of each type, for a function.
 
 
 GEN_SERVER_CPRE
@@ -31,7 +30,6 @@ Other
 
 
 - It is important that the reported error give an informative information to detect the source of the error. 
-- Generate edoc from contracts. TRIED: found some problems importing hrl file. 
 - Generate eunit tests from contracts.
 - Generate property tests from contracts.
 - Invariants when spawning a new process, such as its number of queued messages cannot be greater than 1, etc.

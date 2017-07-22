@@ -19,6 +19,6 @@ output_unfair4readers
 
 output_unfair4writers
 
-examples/other/docs/*
-
 output.xml
+
+doc/

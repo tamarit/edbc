@@ -118,13 +118,13 @@ f_pure() ->
     % spawn(fun() -> ok end),
     % self()!hi,
     % dets:open_file(table, []),
-    % ets:new(table, [set]),
+    ets:new(table, [set]),
     % rand:uniform(30),
     % put(r, 1),
     % Not-detected side-effect operations
     % get(r),
     % This exits are reported as they are (they are not affected by the tracing). However, the tracestack is lost.
-    3/0,
+    % 3/0,
     % exit("out"),
     % throw("out"),
     ok.

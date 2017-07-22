@@ -1,0 +1,23 @@
+#!/bin/bash
+
+edbc_path0=$(dirname "$0")
+edbc_path="$edbc_path0/.."
+current_path=$(pwd)
+
+if [ $# -lt 1 ]
+then 
+	echo -e "Usage:\n\tedbc_erl EBIN_DIR [CALL]"
+else
+	if [ "${DIR:0:1}" = "/" ]
+	then
+		file_path=$1
+	else
+		file_path="$current_path/$1"
+	fi
+	if [ $# -eq 2 ]
+	then
+		erl -pa $file_path "$edbc_path/ebin" "$edbc_path/deps/sheriff/ebin" "$edbc_path/deps/parse_trans/ebin" -noshell -eval $2 -eval -s erlang halt  
+	else
+		erl -pa $file_path "$edbc_path/ebin" "$edbc_path/deps/sheriff/ebin" "$edbc_path/deps/parse_trans/ebin"
+	fi
+fi

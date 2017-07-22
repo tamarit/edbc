@@ -41,24 +41,32 @@ parse_transform(Forms, Options) ->
 
 	NewForms = 
 		[erl_syntax:revert(IF) || IF <- Forms2],
-	case EDBC_ON of 
-		true -> 
-			try begin
-					code:load_file(sheriff),
-					sheriff:parse_transform(NewForms, Options) 
-				end
-			of
-				SheriffForms ->
-					% io:format("Succeful Sheriff transformation.\n"),
-					SheriffForms
-			catch
-				E1:E2 ->
-					% io:format("Something went wrong.\n~p\n", [{E1, E2}]),
-					replace_calls_to_sheriff(NewForms)
-			end;
-		false -> 
-			NewForms
-	end.
+	ReturnedForms = 
+		case EDBC_ON of 
+			true -> 
+				try begin
+						code:load_file(sheriff),
+						sheriff:parse_transform(NewForms, Options) 
+					end
+				of
+					SheriffForms ->
+						% io:format("Succeful Sheriff transformation.\n"),
+						SheriffForms
+				catch
+					E1:E2 ->
+						% io:format("Something went wrong.\n~p\n", [{E1, E2}]),
+						replace_calls_to_sheriff(NewForms)
+				end;
+			false -> 
+				NewForms
+		end,
+
+	% TODO: Remove the unsued function introduced by sheriff
+
+	% uncomment to print the pretty-printted version of the code
+	% [io:format("~s\n", [lists:flatten(erl_prettypr:format(F))]) || F <- ReturnedForms],
+
+	ReturnedForms.
 
 print_clean_code(SourceFile, IncludeDirs) ->
 	{ok, Forms} = 
@@ -71,6 +79,7 @@ print_clean_code(SourceFile, IncludeDirs) ->
 	ok.
 
 print_clean_code(SourceFile, IncludeDirs, OutputFile) ->
+	% io:format("Params: ~p\n", [{SourceFile, IncludeDirs, OutputFile}]),
 	{ok, Forms0} = 
 		epp:parse_file(SourceFile, IncludeDirs, []),
 	Comments = 
