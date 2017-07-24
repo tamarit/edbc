@@ -59,3 +59,6 @@ To see
 - https://www.python.org/dev/peps/pep-0316/
 - "Starvation and Critical Race Analyzers for Ada"
 - http://www.rise4fun.com/Dafny/
+- https://www.youtube.com/watch?v=OcbE6nL1QEk
+- https://vimeo.com/148089863
+- https://github.com/hyperthunk/annotations
