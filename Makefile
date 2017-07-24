@@ -48,3 +48,9 @@ run_rw_unfair4readers:
 run_rw_fair:
 	@scripts/edbc_erlc "examples/readers_writers/fair/src/*.erl" examples/readers_writers/fair/ebin
 	@scripts/edbc_erl examples/readers_writers/fair/ebin "readers_writers_test:test()"
+
+test_semaphore:
+	@scripts/edbc_erlc "examples/semaphore/src/*.erl" examples/semaphore/ebin
+	@scripts/edbc_erl examples/semaphore/ebin "semaphore_tests:test()"
+
+

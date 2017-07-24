@@ -67,6 +67,8 @@ pre(Pre, Call) ->
 	case Pre() of 
 		true -> 
 			Call();
+		{true, _} -> 
+			Call();
 		false -> 
 			error({"The pre-condition is not hold.", get_stacktrace()});
 		{false, Msg} -> 
@@ -81,6 +83,8 @@ post(Post, Call) ->
 	Res =  Call(),
 	case Post(Res) of 
 		true -> 
+			Res;
+		{true, _} -> 
 			Res;
 		false -> 
 			error({"The post-condition is not hold.", get_stacktrace()});
