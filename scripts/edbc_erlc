@@ -18,12 +18,12 @@ else
 	then
 		if [ "${DIR:0:1}" = "/" ]
 		then
-			ebin_path=$1
+			ebin_path=$2
 		else
-			ebin_path="$current_path/$1"
+			ebin_path="$current_path/$2"
 		fi
-		erlc -pa "$edbc_path/ebin" -pa "$edbc_path/deps/sheriff/ebin" -pa "$edbc_path/deps/parse_trans/ebin" -I "$edbc_path/include" -o $ebin_path -Dedbc $file_path
+		erlc -pa "$edbc_path/ebin" -pa "$edbc_path/deps/sheriff/ebin" -pa "$edbc_path/deps/parse_trans/ebin" -I "$edbc_path/include" -W0 -o $ebin_path -Dedbc $file_path
 	else
-		erlc -pa "$edbc_path/ebin" -pa "$edbc_path/deps/sheriff/ebin" -pa "$edbc_path/deps/parse_trans/ebin" -I "$edbc_path/include" -Dedbc $file_path
+		erlc -pa "$edbc_path/ebin" -pa "$edbc_path/deps/sheriff/ebin" -pa "$edbc_path/deps/parse_trans/ebin" -I "$edbc_path/include" -W0 -Dedbc $file_path
 	fi
 fi
