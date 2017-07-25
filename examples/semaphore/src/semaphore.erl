@@ -40,14 +40,35 @@ invariant(
 		}) -> 
 	and_reason(
 		[
-			{is_integer(Counter), "The state's attribute counter should be an integer."},
-			{is_boolean(Ready), "The state's attribute ready should be a boolean."},
-			{is_integer(Top), "The state's attribute top should be an integer."},
-			{Top >= 0, "The top cannnot be negative."},
-			{Counter >= 0, "The counter cannot be negative."},
-			{Top >= Counter, "The counter cannot be greater than the top."},
+			{
+				is_integer(Counter), 
+				"The state's attribute counter should be an integer."
+			},
+			{
+				is_boolean(Ready), 
+				"The state's attribute ready should be a boolean."
+			},
+			{
+				is_integer(Top), 
+				"The state's attribute top should be an integer."
+			},
+			{
+				Top >= 0, 
+				"The top cannnot be negative."
+			},
+			{
+				Counter >= 0, 
+				"The counter cannot be negative."
+			},
+			{
+				Top >= Counter, 
+				"The counter cannot be greater than the top."
+			},
 			% (Counter > 0) => (Ready == true).
-			{(Counter == 0 orelse Ready), "The semaphore should be ready when counter is greater than 0."}
+			{
+				(Counter == 0 orelse Ready), 
+				"The semaphore should be ready when counter is greater than 0."
+			}
 		]).
 
 and_reason(List) ->  
