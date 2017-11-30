@@ -33,6 +33,10 @@ load_ej1_noedbc:
 doc_ej1:
 	@scripts/edbc_edoc examples/other/src/ej1.erl examples/other/docs
 
+load_merge:
+	@scripts/edbc_erlc examples/other/src/merge.erl examples/other/ebin
+	@scripts/edbc_erl examples/other/ebin 
+
 run_library:
 	@scripts/edbc_erlc "examples/other/src/library*.erl" examples/other/ebin
 	@scripts/edbc_erl examples/other/ebin "library_test:test1()"
@@ -50,7 +54,23 @@ run_rw_fair:
 	@scripts/edbc_erl examples/readers_writers/fair/ebin "readers_writers_test:test()"
 
 test_semaphore:
-	@scripts/edbc_erlc "examples/semaphore/src/*.erl" examples/semaphore/ebin
-	@scripts/edbc_erl examples/semaphore/ebin "semaphore_tests:test()"
+	@scripts/edbc_erlc "examples/semaphore/no_queues/src/*.erl" examples/semaphore/no_queues/ebin
+	@scripts/edbc_erl examples/semaphore/no_queues/ebin "semaphore_tests:test()"
 
+# Test cases (Queued versions)
 
+run_rw_fair_q:
+	@scripts/edbc_erlc "examples/readers_writers/fair_queues/src/*.erl" examples/readers_writers/fair_queues/ebin
+	@scripts/edbc_erl examples/readers_writers/fair_queues/ebin "readers_writers_test:test()"
+
+run_rw_unfair4writers_q:
+	@scripts/edbc_erlc "examples/readers_writers/unfair4writers_queues/src/*.erl" examples/readers_writers/unfair4writers_queues/ebin
+	@scripts/edbc_erl examples/readers_writers/unfair4writers_queues/ebin "readers_writers_test:test()"
+
+run_rw_unfair4readers_q:
+	@scripts/edbc_erlc "examples/readers_writers/unfair4readers_queues/src/*.erl" examples/readers_writers/unfair4readers_queues/ebin
+	@scripts/edbc_erl examples/readers_writers/unfair4readers_queues/ebin "readers_writers_test:test()"
+
+test_semaphore_q:
+	@scripts/edbc_erlc "examples/semaphore/queues/src/*.erl" examples/semaphore/queues/ebin
+	@scripts/edbc_erl examples/semaphore/queues/ebin "semaphore_tests:test()"
