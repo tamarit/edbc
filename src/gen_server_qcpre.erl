@@ -16,8 +16,8 @@
 %% limitations under the License.
 %%
 %% %CopyrightEnd%
-%%
--module(gen_server_cpre).
+%% 
+-module(gen_server_qcpre).
 
 %%% ---------------------------------------------------
 %%%
@@ -313,7 +313,7 @@ enter_loop(Mod, Options, State, ServerName, Timeout) ->
     Parent = gen_mod:get_parent(),
     Debug = gen_mod:debug_options(Name, Options),
 	HibernateAfterTimeout = gen_mod:hibernate_after(Options),
-    loop(Parent, Name, State, Mod, Timeout, HibernateAfterTimeout, Debug).
+    loop(Parent, Name, State, Mod, Timeout, HibernateAfterTimeout, Debug, {[], []}).
 
 %%%========================================================================
 %%% Gen-callback functions
@@ -336,10 +336,10 @@ init_it(Starter, Parent, Name0, Mod, Args, Options) ->
     case init_it(Mod, Args) of
 	{ok, {ok, State}} ->
 	    proc_lib_mod:init_ack(Starter, {ok, self()}), 	    
-	    loop(Parent, Name, State, Mod, infinity, HibernateAfterTimeout, Debug);
+	    loop(Parent, Name, State, Mod, infinity, HibernateAfterTimeout, Debug, {[], []});
 	{ok, {ok, State, Timeout}} ->
 	    proc_lib_mod:init_ack(Starter, {ok, self()}), 	    
-	    loop(Parent, Name, State, Mod, Timeout, HibernateAfterTimeout, Debug);
+	    loop(Parent, Name, State, Mod, Timeout, HibernateAfterTimeout, Debug, {[], []});
 	{ok, {stop, Reason}} ->
 	    %% For consistency, we must make sure that the
 	    %% registered name (if any) is unregistered before
@@ -377,35 +377,51 @@ init_it(Mod, Args) ->
 %%% ---------------------------------------------------
 %%% The MAIN loop.
 %%% ---------------------------------------------------
-loop(Parent, Name, State, Mod, hibernate, HibernateAfterTimeout, Debug) ->
+loop(Parent, Name, State, Mod, hibernate, HibernateAfterTimeout, Debug, {PendingQueueCurrent, PendingQueueOldest}) ->
+    % When hibernated all the pending messages are added to the end of the queue
+    [self() ! {'$gen_call', From, Msg} || {From, Msg} <- (lists:reverse(PendingQueueOldest) ++ PendingQueueCurrent)],
     proc_lib_mod:hibernate(?MODULE,wake_hib,[Parent, Name, State, Mod, HibernateAfterTimeout, Debug]);
 
-loop(Parent, Name, State, Mod, infinity, HibernateAfterTimeout, Debug) ->
-	receive
-		Msg ->
-            % io:format("READ ~p\n", [Msg]),
-			decode_msg(Msg, Parent, Name, State, Mod, infinity, HibernateAfterTimeout, Debug, false)
-	after HibernateAfterTimeout ->
-		loop(Parent, Name, State, Mod, hibernate, HibernateAfterTimeout, Debug)
-	end;
+loop(Parent, Name, State, Mod, infinity, HibernateAfterTimeout, Debug, PendingQueue = {PendingQueueCurrent, PendingQueueOldest}) ->
+    case PendingQueueCurrent of 
+        [] -> 
+            % io:format("GET FROM RECEIVE\n"),
+            receive
+                Msg ->
+                    % io:format("READ ~p\n", [Msg]),
+                    decode_msg(Msg, Parent, Name, State, Mod, infinity, HibernateAfterTimeout, Debug, false, PendingQueue)
+            after HibernateAfterTimeout ->
+                loop(Parent, Name, State, Mod, hibernate, HibernateAfterTimeout, Debug, PendingQueue)
+            end;
+        [{From, Msg} | T] -> 
+            % io:format("GET FROM PENDING\n"),
+            decode_msg({'$gen_call', From, Msg}, Parent, Name, State, Mod, infinity, HibernateAfterTimeout, Debug, false, {T, PendingQueueOldest})
+    end;
 
-loop(Parent, Name, State, Mod, Time, HibernateAfterTimeout, Debug) ->
-    Msg = receive
-	      Input ->
-		    Input
-	  after Time ->
-		  timeout
-	  end,
-    decode_msg(Msg, Parent, Name, State, Mod, Time, HibernateAfterTimeout, Debug, false).
+loop(Parent, Name, State, Mod, Time, HibernateAfterTimeout, Debug, PendingQueue = {PendingQueueCurrent, PendingQueueOldest}) ->
+    case PendingQueueCurrent of 
+        [] -> 
+            % io:format("GET FROM RECEIVE\n"),
+            Msg = receive
+        	      Input ->
+        		    Input
+        	  after Time ->
+        		  timeout
+        	  end,
+            decode_msg(Msg, Parent, Name, State, Mod, Time, HibernateAfterTimeout, Debug, false, PendingQueue);
+        [{From, Msg} | T] -> 
+            % io:format("GET FROM PENDING\n"),
+            decode_msg({'$gen_call', From, Msg}, Parent, Name, State, Mod, Time, HibernateAfterTimeout, Debug, false, {T, PendingQueueOldest})
+    end.
 
 wake_hib(Parent, Name, State, Mod, HibernateAfterTimeout, Debug) ->
     Msg = receive
 	      Input ->
 		  Input
 	  end,
-    decode_msg(Msg, Parent, Name, State, Mod, hibernate, HibernateAfterTimeout, Debug, true).
+    decode_msg(Msg, Parent, Name, State, Mod, hibernate, HibernateAfterTimeout, Debug, true, {[], []}).
 
-decode_msg(Msg, Parent, Name, State, Mod, Time, HibernateAfterTimeout, Debug, Hib) ->
+decode_msg(Msg, Parent, Name, State, Mod, Time, HibernateAfterTimeout, Debug, Hib, PendingQueue) ->
     case Msg of
 	{system, From, Req} ->
 	    sys:handle_system_msg(Req, From, Parent, ?MODULE, Debug,
@@ -413,11 +429,11 @@ decode_msg(Msg, Parent, Name, State, Mod, Time, HibernateAfterTimeout, Debug, Hi
 	{'EXIT', Parent, Reason} ->
 	    terminate(Reason, ?STACKTRACE(), Name, undefined, Msg, Mod, State, Debug);
 	_Msg when Debug =:= [] ->
-	    handle_msg(Msg, Parent, Name, State, Mod, HibernateAfterTimeout);
+	    handle_msg(Msg, Parent, Name, State, Mod, HibernateAfterTimeout, PendingQueue);
 	_Msg ->
 	    Debug1 = sys:handle_debug(Debug, fun print_event/3,
 				      Name, {in, Msg}),
-	    handle_msg(Msg, Parent, Name, State, Mod, HibernateAfterTimeout, Debug1)
+	    handle_msg(Msg, Parent, Name, State, Mod, HibernateAfterTimeout, Debug1, PendingQueue)
     end.
 
 %%% ---------------------------------------------------
@@ -665,56 +681,61 @@ try_terminate(Mod, Reason, State) ->
 %%% Message handling functions
 %%% ---------------------------------------------------
 
-handle_msg({'$gen_call', From, Msg}, Parent, Name, State0, Mod, HibernateAfterTimeout) ->
+handle_msg({'$gen_call', From, Msg}, Parent, Name, State0, Mod, HibernateAfterTimeout, PendingQueue) ->
 	case Mod:cpre(Msg, From, State0) of 
 		{true, State} -> 
+            % io:format("CPRE OK\n"),
             % io:format("PROCESSED ~p\n", [{'$gen_call', From, Msg}]),
 		    Result = try_handle_call(Mod, Msg, From, State),
 		    case Result of
 				{ok, {reply, Reply, NState}} ->
 				    reply(From, Reply),
-				    loop(Parent, Name, NState, Mod, infinity, HibernateAfterTimeout, []);
+                    % NState /= State, because change in CPRE are not considered "real" changes in the state
+				    loop(Parent, Name, NState, Mod, infinity, HibernateAfterTimeout, [],  calculate_new_pending(NState, State, PendingQueue));
 				{ok, {reply, Reply, NState, Time1}} ->
 				    reply(From, Reply),
-				    loop(Parent, Name, NState, Mod, Time1, HibernateAfterTimeout, []);
+				    loop(Parent, Name, NState, Mod, Time1, HibernateAfterTimeout, [], calculate_new_pending(NState, State, PendingQueue));
 				{ok, {noreply, NState}} ->
-				    loop(Parent, Name, NState, Mod, infinity, HibernateAfterTimeout, []);
+				    loop(Parent, Name, NState, Mod, infinity, HibernateAfterTimeout, [], calculate_new_pending(NState, State, PendingQueue));
 				{ok, {noreply, NState, Time1}} ->
-				    loop(Parent, Name, NState, Mod, Time1, HibernateAfterTimeout, []);
+				    loop(Parent, Name, NState, Mod, Time1, HibernateAfterTimeout, [], calculate_new_pending(NState, State, PendingQueue));
 				{ok, {stop, Reason, Reply, NState}} ->
 				    try
 					terminate(Reason, ?STACKTRACE(), Name, From, Msg, Mod, NState, [])
 				    after
 					reply(From, Reply)
 				    end;
-				Other -> handle_common_reply(Other, Parent, Name, From, Msg, Mod, HibernateAfterTimeout, State)
+				Other -> handle_common_reply(Other, Parent, Name, From, Msg, Mod, HibernateAfterTimeout, State, PendingQueue)
 		    end;
 		{false, State} -> 
-			self() ! {'$gen_call', From, Msg},
+            % io:format("CPRE NOT OK\n"),
+			% self() ! {'$gen_call', From, Msg},
             % io:format("Discarded Msg: ~p\n", [{{From, Msg}, State}]),
-			loop(Parent, Name, State, Mod, infinity, HibernateAfterTimeout, [])
+			loop(Parent, Name, State, Mod, infinity, HibernateAfterTimeout, [], put_new_pending({From, Msg},  PendingQueue))
 	end;
-handle_msg(Msg, Parent, Name, State, Mod, HibernateAfterTimeout) ->
+handle_msg(Msg, Parent, Name, State, Mod, HibernateAfterTimeout, PendingQueue) ->
+    % io:format("CPRE NOT TESTED\n"),
     Reply = try_dispatch(Msg, Mod, State),
-    handle_common_reply(Reply, Parent, Name, undefined, Msg, Mod, HibernateAfterTimeout, State).
+    handle_common_reply(Reply, Parent, Name, undefined, Msg, Mod, HibernateAfterTimeout, State, PendingQueue).
 
-handle_msg({'$gen_call', From, Msg}, Parent, Name, State, Mod, HibernateAfterTimeout, Debug) ->
+% There is not CPREs involved in this kind of calls
+handle_msg({'$gen_call', From, Msg}, Parent, Name, State, Mod, HibernateAfterTimeout, Debug, PendingQueue) ->
     Result = try_handle_call(Mod, Msg, From, State),
     case Result of
 	{ok, {reply, Reply, NState}} ->
 	    Debug1 = reply(Name, From, Reply, NState, Debug),
-	    loop(Parent, Name, NState, Mod, infinity, HibernateAfterTimeout, Debug1);
+	    loop(Parent, Name, NState, Mod, infinity, HibernateAfterTimeout, Debug1, PendingQueue);
 	{ok, {reply, Reply, NState, Time1}} ->
 	    Debug1 = reply(Name, From, Reply, NState, Debug),
-	    loop(Parent, Name, NState, Mod, Time1, HibernateAfterTimeout, Debug1);
+	    loop(Parent, Name, NState, Mod, Time1, HibernateAfterTimeout, Debug1, PendingQueue);
 	{ok, {noreply, NState}} ->
 	    Debug1 = sys:handle_debug(Debug, fun print_event/3, Name,
 				      {noreply, NState}),
-	    loop(Parent, Name, NState, Mod, infinity, HibernateAfterTimeout, Debug1);
+	    loop(Parent, Name, NState, Mod, infinity, HibernateAfterTimeout, Debug1, PendingQueue);
 	{ok, {noreply, NState, Time1}} ->
 	    Debug1 = sys:handle_debug(Debug, fun print_event/3, Name,
 				      {noreply, NState}),
-	    loop(Parent, Name, NState, Mod, Time1, HibernateAfterTimeout, Debug1);
+	    loop(Parent, Name, NState, Mod, Time1, HibernateAfterTimeout, Debug1, PendingQueue);
 	{ok, {stop, Reason, Reply, NState}} ->
 	    try
 		terminate(Reason, ?STACKTRACE(), Name, From, Msg, Mod, NState, Debug)
@@ -722,18 +743,18 @@ handle_msg({'$gen_call', From, Msg}, Parent, Name, State, Mod, HibernateAfterTim
 		_ = reply(Name, From, Reply, NState, Debug)
 	    end;
 	Other ->
-	    handle_common_reply(Other, Parent, Name, From, Msg, Mod, HibernateAfterTimeout, State, Debug)
+	    handle_common_reply(Other, Parent, Name, From, Msg, Mod, HibernateAfterTimeout, State, Debug, PendingQueue)
     end;
-handle_msg(Msg, Parent, Name, State, Mod, HibernateAfterTimeout, Debug) ->
+handle_msg(Msg, Parent, Name, State, Mod, HibernateAfterTimeout, Debug, PendingQueue) ->
     Reply = try_dispatch(Msg, Mod, State),
-    handle_common_reply(Reply, Parent, Name, undefined, Msg, Mod, HibernateAfterTimeout, State, Debug).
+    handle_common_reply(Reply, Parent, Name, undefined, Msg, Mod, HibernateAfterTimeout, State, Debug, PendingQueue).
 
-handle_common_reply(Reply, Parent, Name, From, Msg, Mod, HibernateAfterTimeout, State) ->
+handle_common_reply(Reply, Parent, Name, From, Msg, Mod, HibernateAfterTimeout, State, PendingQueue) ->
     case Reply of
 	{ok, {noreply, NState}} ->
-	    loop(Parent, Name, NState, Mod, infinity, HibernateAfterTimeout, []);
+	    loop(Parent, Name, NState, Mod, infinity, HibernateAfterTimeout, [], calculate_new_pending(NState, State, PendingQueue));
 	{ok, {noreply, NState, Time1}} ->
-	    loop(Parent, Name, NState, Mod, Time1, HibernateAfterTimeout, []);
+	    loop(Parent, Name, NState, Mod, Time1, HibernateAfterTimeout, [], calculate_new_pending(NState, State, PendingQueue));
 	{ok, {stop, Reason, NState}} ->
 	    terminate(Reason, ?STACKTRACE(), Name, From, Msg, Mod, NState, []);
 	{'EXIT', Class, Reason, Stacktrace} ->
@@ -742,16 +763,17 @@ handle_common_reply(Reply, Parent, Name, From, Msg, Mod, HibernateAfterTimeout, 
 	    terminate({bad_return_value, BadReply}, ?STACKTRACE(), Name, From, Msg, Mod, State, [])
     end.
 
-handle_common_reply(Reply, Parent, Name, From, Msg, Mod, HibernateAfterTimeout, State, Debug) ->
+% There is not CPREs involved in this kind of calls
+handle_common_reply(Reply, Parent, Name, From, Msg, Mod, HibernateAfterTimeout, State, Debug, PendingQueue) ->
     case Reply of
 	{ok, {noreply, NState}} ->
 	    Debug1 = sys:handle_debug(Debug, fun print_event/3, Name,
 				      {noreply, NState}),
-	    loop(Parent, Name, NState, Mod, infinity, HibernateAfterTimeout, Debug1);
+	    loop(Parent, Name, NState, Mod, infinity, HibernateAfterTimeout, Debug1, PendingQueue);
 	{ok, {noreply, NState, Time1}} ->
 	    Debug1 = sys:handle_debug(Debug, fun print_event/3, Name,
 				      {noreply, NState}),
-	    loop(Parent, Name, NState, Mod, Time1, HibernateAfterTimeout, Debug1);
+	    loop(Parent, Name, NState, Mod, Time1, HibernateAfterTimeout, Debug1, PendingQueue);
 	{ok, {stop, Reason, NState}} ->
 	    terminate(Reason, ?STACKTRACE(), Name, From, Msg, Mod, NState, Debug);
 	{'EXIT', Class, Reason, Stacktrace} ->
@@ -769,8 +791,9 @@ reply(Name, {To, Tag}, Reply, State, Debug) ->
 %%-----------------------------------------------------------------
 %% Callback functions for system messages handling.
 %%-----------------------------------------------------------------
+%% TODO: These functions could make that the pending messages are lost
 system_continue(Parent, Debug, [Name, State, Mod, Time, HibernateAfterTimeout]) ->
-    loop(Parent, Name, State, Mod, Time, HibernateAfterTimeout, Debug).
+    loop(Parent, Name, State, Mod, Time, HibernateAfterTimeout, Debug, {[], []}).
 
 -spec system_terminate(_, _, _, [_]) -> no_return().
 
@@ -954,3 +977,21 @@ format_status(Opt, Mod, PDict, State) ->
 	_ ->
 	    DefStatus
     end.
+
+%%-----------------------------------------------------------------
+%% Queues operations
+%%-----------------------------------------------------------------
+
+calculate_new_pending(State, State, PendingQueue) -> 
+    % io:format("SAME STATE. PendingQueue: ~p\n", [PendingQueue]),
+    PendingQueue;
+calculate_new_pending(_, _, {[], PendingQueueOldest}) -> 
+    % io:format("NEW STATE. PendingQueue FROM ~p TO ~p\n", [{[], PendingQueueOldest}, {lists:reverse(PendingQueueOldest), []}]),
+    {lists:reverse(PendingQueueOldest), []};
+calculate_new_pending(_, _, {PendingQueueCurrent, PendingQueueOldest}) ->
+    % io:format("NEW STATE. PendingQueue FROM ~p TO ~p\n", [{PendingQueueCurrent, PendingQueueOldest}, {lists:reverse(PendingQueueOldest) ++ PendingQueueCurrent, []}]), 
+    {lists:reverse(PendingQueueOldest) ++ PendingQueueCurrent, []}.
+
+put_new_pending({From, Msg}, {PendingQueueCurrent, PendingQueueOldest}) -> 
+    % io:format("PUT NEW PENDING. PendingQueue: ~p\n", [{PendingQueueCurrent, [{From, Msg} | PendingQueueOldest]}]),
+    {PendingQueueCurrent, [{From, Msg} | PendingQueueOldest]}.

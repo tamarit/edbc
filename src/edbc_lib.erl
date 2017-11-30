@@ -48,6 +48,7 @@ post_invariant(_, ignore) ->
 
 decreasing_check(NewValues, OldValues, F) -> 
 	case lists:all(
+			fun(B) -> B end,
 			[NewValue =< OldValue 
 			|| {NewValue, OldValue} <- lists:zip(NewValues, OldValues)]) 
 	of 

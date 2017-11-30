@@ -247,6 +247,7 @@ init_p_do_apply(M, F, A) ->
 	apply(M, F, A) 
     catch
 	Class:Reason ->
+      % io:format("ERROR: ~p\n", [{Class, Reason, erlang:get_stacktrace()}]),
 	    exit_p(Class, Reason, erlang:get_stacktrace())
     end.
 
