@@ -14,10 +14,10 @@
 % Checks that a parameter (or a list of parameters) is decreased in recursive calls (only working for self-recursive function now)
 -define(DECREASES(PAR), edbc_decreases() -> PAR).
 
-% Checks that the execution time is less or equal than FUN(). Function FUN can include parameters.
+% Checks that the execution time is less or equal than FUN(). Function FUN can include parameters, i.e. it can use the macro ?P/1.
 -define(EXPECTED_TIME(FUN), edbc_expected_time() -> FUN).
 
-% Cut the execution of a function when its exectution time is longer than FUN(). Function FUN can include parameters.
+% Cut the execution of a function when its exectution time is longer than FUN(). Function FUN can include parameters, i.e. it can use the macro ?P/1.
 -define(TIMEOUT(FUN), edbc_timeout() -> FUN).
 
 % An error is raised if the function perform unsafe operations. This is not compatible with EXPECTED_TIME and TIMEOUT because they perform unsafe operations.

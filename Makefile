@@ -57,6 +57,14 @@ test_semaphore:
 	@scripts/edbc_erlc "examples/semaphore/no_queues/src/*.erl" examples/semaphore/no_queues/ebin
 	@scripts/edbc_erl examples/semaphore/no_queues/ebin "semaphore_tests:test()"
 
+test_sel_recv:
+	@scripts/edbc_erlc "examples/sel_recv/gen_server/src/*.erl" examples/sel_recv/gen_server/ebin
+	@erl -pa  examples/sel_recv/gen_server/ebin -eval "sel_recv_test:test()" -eval -s erlang halt  
+
+test_sel_recv_q:
+	@scripts/edbc_erlc "examples/sel_recv/gen_server_qcpre/src/*.erl" examples/sel_recv/gen_server_qcpre/ebin
+	@erl -pa "examples/sel_recv/gen_server_qcpre/ebin" "ebin" "deps/sheriff/ebin" "deps/parse_trans/ebin" -eval "sel_recv_test:test()" -s erlang halt  
+
 # Test cases (Queued versions)
 
 run_rw_fair_q:
