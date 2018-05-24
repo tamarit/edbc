@@ -102,7 +102,7 @@ f_rec(M, N) ->
 -spec f_time(integer())  -> integer().
 
 
-% Samle call
+% Sample call
 % ej1:f_time(lists:seq(1,10)).
 f_time(L) -> 
     [timer:sleep(100) || _ <- L].

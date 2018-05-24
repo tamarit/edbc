@@ -64,7 +64,7 @@ parse_transform(Forms, Options) ->
 	% TODO: Remove the unsued function introduced by sheriff
 
 	% uncomment to print the pretty-printted version of the code
-	% [io:format("~s\n", [lists:flatten(erl_prettypr:format(F))]) || F <- ReturnedForms],
+	[io:format("~s\n", [lists:flatten(erl_prettypr:format(F))]) || F <- ReturnedForms],
 
 	ReturnedForms.
 
@@ -369,13 +369,13 @@ build_funs(Forms, EDBC_ON, EDocGen) ->
 						{NewForm, NAcc} = 
 							case {PreDec, EDBC_ON} of 
 								{[PreDecFun | _], true} ->	
-									{NewForm0, AuxFun} = 	
+									{NewForm0, AuxFuns} = 	
 										transform_decreases_function(
 											Form,
 											extract_decrease_paramenter(PreDecFun)),
 									{
 										NewForm0,
-										[AuxFun | Acc]
+										AuxFuns ++ Acc
 									};
 								{[PreDecFun | _], false} ->
 									ParNumber = 
@@ -524,7 +524,10 @@ remove_funs(Forms, ToRemove) ->
 		fun(Form, Acc) -> 
 			case erl_syntax:type(Form) of 
 				function -> 
-					case lists:member(fun_name_arity(Form), ToRemoveFunArity) of 
+					case lists:member(
+							fun_name_arity(Form), 
+							ToRemoveFunArity) 
+					of 
 						true -> 
 							Acc;
 						false -> 
@@ -544,6 +547,13 @@ remove_funs(Forms, ToRemove) ->
 transform_pre_post_function(Form, FunOrBody, OtherForms, IsPost, LibFunction) ->
 	FormName = 
 		erl_syntax:function_name(Form),
+	StoreStack = 
+		case erl_syntax:get_pos(FormName) of 
+			0 -> 
+				false;
+			_ -> 
+				true
+		end,
 	NewId = 
 		get_free_id( 
 			erl_syntax:atom_value(
@@ -552,6 +562,8 @@ transform_pre_post_function(Form, FunOrBody, OtherForms, IsPost, LibFunction) ->
 		erl_syntax:function(
 			NewId, 
 			erl_syntax:function_clauses(Form)),
+	% NForm = 
+	% 	erl_syntax:copy_attrs(Form, NForm0),
 	ParamOrderVars = 
 		[ 	{Order, get_free_variable()} 
 		|| 	Order <- lists:seq(1, erl_syntax:function_arity(NForm))],
@@ -621,13 +633,47 @@ transform_pre_post_function(Form, FunOrBody, OtherForms, IsPost, LibFunction) ->
 								[CallToFun]
 							)])
 				]),
+	BodyStoreStack = 
+		case StoreStack of 
+			true -> 
+				% [erl_syntax:application(
+				% 	erl_syntax:module_qualifier(
+				% 		erl_syntax:atom(erlang),
+				% 		erl_syntax:atom(put)),
+				% 		[
+				% 			erl_syntax:atom(edbc_st),
+				% 			build_stack_trace()
+				% 		]),
+				% erl_syntax:application(
+				% 	erl_syntax:module_qualifier(
+				% 		erl_syntax:atom(erlang),
+				% 		erl_syntax:atom(put)),
+				% 		[
+				% 			erl_syntax:atom(edbc_cc),
+				% 			erl_syntax:list([FormName | ParamVars])
+				% 		])];
+				[
+					erl_syntax:application(
+						erl_syntax:module_qualifier(
+							erl_syntax:atom(edbc_lib),
+							erl_syntax:atom(put_st)),
+							[]),
+					erl_syntax:application(
+						erl_syntax:module_qualifier(
+							erl_syntax:atom(edbc_lib),
+							erl_syntax:atom(put_call)),
+							[erl_syntax:list([FormName | ParamVars])])
+				];
+			false -> 
+				[]
+		end,		
 	InForm = 
 		erl_syntax:function(
 			FormName,
 			[erl_syntax:clause(
 				ParamVars,
 				none,
-				[BodyInForm])]),
+				BodyStoreStack ++ [BodyInForm])]),
 	{InForm, NForm, FormPostFun}.
 
 transform_pre_function(Form, FunOrBody, OtherForms) ->
@@ -663,6 +709,10 @@ transform_decreases_function(Function, ParNumbers) ->
 		get_free_id(
 			erl_syntax:atom_value(
 				FunctionName)),
+	Aux2FunctionName = 
+		get_free_id(
+			erl_syntax:atom_value(
+				FunctionName)),
 	FunctionClauses = 
 		erl_syntax:function_clauses(Function),
 	NewFunctionClauses = 
@@ -677,7 +727,7 @@ transform_decreases_function(Function, ParNumbers) ->
 			FunctionClauses),
 	NewFunction = 
 		erl_syntax:function(
-			FunctionName,
+			Aux2FunctionName,
 			NewFunctionClauses),
 	AuxFunctionOldValuePar = 
 		get_free_variable(),
@@ -718,7 +768,49 @@ transform_decreases_function(Function, ParNumbers) ->
 		erl_syntax:function(
 			AuxFunctionName,
 			[AuxFunctionClause]),
-	{NewFunction, AuxFunction}.
+	AuxFunction2Pars =
+		[get_free_variable() 
+		|| _ <- lists:seq(1, erl_syntax:function_arity(Function))],
+	AuxFunction2Clause = 
+		erl_syntax:clause(
+			AuxFunction2Pars,
+			none,
+			[
+				% erl_syntax:application(
+				% 	erl_syntax:module_qualifier(
+				% 		erl_syntax:atom(erlang),
+				% 		erl_syntax:atom(put)),
+				% 		[
+				% 			erl_syntax:atom(edbc_st),
+				% 			build_stack_trace()
+				% 		]),
+				% erl_syntax:application(
+				% 	erl_syntax:module_qualifier(
+				% 		erl_syntax:atom(erlang),
+				% 		erl_syntax:atom(put)),
+				% 		[
+				% 			erl_syntax:atom(edbc_cc),
+				% 			erl_syntax:list([FunctionName | AuxFunction2Pars])
+				% 		]),
+				erl_syntax:application(
+					erl_syntax:module_qualifier(
+						erl_syntax:atom(edbc_lib),
+						erl_syntax:atom(put_st)),
+						[]),
+				erl_syntax:application(
+					erl_syntax:module_qualifier(
+						erl_syntax:atom(edbc_lib),
+						erl_syntax:atom(put_call)),
+						[erl_syntax:list([FunctionName | AuxFunction2Pars])]),
+				erl_syntax:application(
+					Aux2FunctionName, 
+					AuxFunction2Pars)
+			]),
+	AuxFunction2 = 
+		erl_syntax:function(
+			FunctionName,
+			[AuxFunction2Clause]),
+	{NewFunction, [AuxFunction2, AuxFunction]}.
 	
 
 replace_recursive_calls(Clause, FunctionName, AuxFunctionName, ParNumbers) -> 
@@ -840,7 +932,7 @@ build_call_sheriff(ParId, SrtType) ->
 											erl_syntax:atom(io_lib),
 											erl_syntax:atom(format)),
 								[
-									erl_syntax:string("The value ~p is not of type ~p."),
+									erl_syntax:string(" The value ~p is not of type ~s."),
 									erl_syntax:list([Value, erl_syntax:string(SrtType)])
 								])
 							])
@@ -1194,6 +1286,33 @@ get_free_id(Atom) ->
 		Value ->
 			Value
 	end. 
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Stack trace
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+% try throw(42) catch 42 -> erlang:get_stacktrace() end,
+build_stack_trace() ->
+	erl_syntax:try_expr(
+		[
+			erl_syntax:application(
+				erl_syntax:module_qualifier(
+						erl_syntax:atom(erlang),
+						erl_syntax:atom(throw)),
+				[erl_syntax:integer(42)])
+		],
+		[
+			erl_syntax:clause(
+				[erl_syntax:integer(42)], 
+				none, 
+				[
+					erl_syntax:application(
+						erl_syntax:module_qualifier(
+								erl_syntax:atom(erlang),
+								erl_syntax:atom(get_stacktrace)),
+						[])
+				])
+		]).
 
 
 % gen_edoc(Form, false, _) -> 

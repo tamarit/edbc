@@ -10,6 +10,8 @@ PRE, POST, ...
 - decreases for a recursions a -> b -> a -> b
 - One option to do this is by using tracing. Each time a call to the function is detected the check is performed.
 
+- The top of the stack has not postion info. This is unsalvable even by copying attributes from the original form.
+
 
 
 GEN_SERVER_CPRE

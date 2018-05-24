@@ -65,6 +65,14 @@ test_sel_recv_q:
 	@scripts/edbc_erlc "examples/sel_recv/gen_server_qcpre/src/*.erl" examples/sel_recv/gen_server_qcpre/ebin
 	@erl -pa "examples/sel_recv/gen_server_qcpre/ebin" "ebin" "deps/sheriff/ebin" "deps/parse_trans/ebin" -eval "sel_recv_test:test()" -s erlang halt  
 
+load_ej_paper:
+	@scripts/edbc_erlc examples/other/src/ej_paper.erl examples/other/ebin
+	@scripts/edbc_erl examples/other/ebin 
+
+load_ej_temp:
+	@scripts/edbc_erlc examples/other/src/ej_temp.erl examples/other/ebin
+	@scripts/edbc_erl examples/other/ebin 
+
 # Test cases (Queued versions)
 
 run_rw_fair_q:

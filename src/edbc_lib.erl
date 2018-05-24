@@ -8,7 +8,10 @@
 			timeout/2,
 			is_pure/2,
 			spec_check_pre/2,
-			spec_check_post/2
+			spec_check_post/2,
+			put_st/0,
+			put_call/1,
+			put_already_tracing/1
 			% sheriff_check/2
 		]).
 
@@ -55,10 +58,29 @@ decreasing_check(NewValues, OldValues, F) ->
 		true -> 
 			F();
 		false -> 
-			error({"Decreasing condition does not hold.", get_stacktrace()});
+			[FN | _] = 
+				get(edbc_cc),
+			ErrorMsg = 
+				format(
+					"Decreasing condition does not hold."
+					" Previous call: ~s."
+					" Current call: ~s.",
+					[build_call_str([FN | OldValues]), build_call_str([FN | NewValues])]),
+			error({ErrorMsg, get(edbc_st)});
 		{false, Msg} -> 
-			error({"Decreasing condition does not hold." ++ Msg, get_stacktrace()})
+			[FN | _] = 
+				get(edbc_cc),
+			ErrorMsg = 
+				format(
+					"Decreasing condition does not hold."
+					" Previous call: ~s."
+					" Current call: ~s."
+					" ~s",
+					[build_call_str([FN | OldValues]), build_call_str([FN | NewValues]), Msg]),
+			error({ErrorMsg, get(edbc_st)})
 	end.
+
+% Sacar modulo de la stack para poder ponerselo a la call
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % pre/2
@@ -71,9 +93,17 @@ pre(Pre, Call) ->
 		{true, _} -> 
 			Call();
 		false -> 
-			error({"The pre-condition is not hold.", get_stacktrace()});
+			ErrorMsg = 
+				format(
+					"The pre-condition does not hold. ~s.",
+					[last_call_str()]),
+			error({ErrorMsg, get(edbc_st)});
 		{false, Msg} -> 
-			error({"The pre-condition is not hold." ++ Msg, get_stacktrace()})
+			ErrorMsg = 
+				format(
+					"The pre-condition does not hold. ~s. ~s",
+					[last_call_str(), Msg]),
+			error({ErrorMsg, get(edbc_st)})
 	end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -88,9 +118,17 @@ post(Post, Call) ->
 		{true, _} -> 
 			Res;
 		false -> 
-			error({"The post-condition is not hold.", get_stacktrace()});
+			ErrorMsg = 
+				format(
+					"The post-condition does not hold. ~s.",
+					[last_call_str()]),
+			error({ErrorMsg, get(edbc_st)});
 		{false, Msg} -> 
-			error({"The post-condition is not hold." ++ Msg, get_stacktrace()})
+			ErrorMsg = 
+				format(
+					"The post-condition does not hold. ~s. ~s",
+					[last_call_str(), Msg]),
+			error({ErrorMsg, get(edbc_st)})
 	end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -104,17 +142,18 @@ expected_time(Time, Call) ->
 		os:timestamp(),
 	Res = Call(),
 	ExeTime = 
-		timer:now_diff(os:timestamp(), StartTime)/1000, % 1000 because now_diff returns microseconds and we wants miliseconds
+		timer:now_diff(os:timestamp(), StartTime)/1000, 
+		% 1000 because now_diff returns microseconds and we wants miliseconds
 	% io:format("ExeTime: ~p\nExpected: ~p\n", [ExeTime, Expected]),
 	case ExeTime < Expected of 
 		true -> 
 			Res;
 		false -> 
 			ErrorMsg = 
-				lists:flatten(
-					io_lib:format(
-						"The execution of the function took too much time\nReal: ~p ms\nExpected: ~p ms\nDifference: ~p ms).\n", 
-						[ExeTime, Expected, ExeTime - Expected])),
+				format(
+					"The execution of the function took too much time\n"
+					"Real: ~p ms\nExpected: ~p ms\nDifference: ~p ms).\n", 
+					[ExeTime, Expected, ExeTime - Expected]),
 			error({ErrorMsg, get_stacktrace()})
 	end.
 
@@ -136,115 +175,11 @@ timeout(Time, Call) ->
 	after 
 		Timeout -> 
 			ErrorMsg = 
-				lists:flatten(
-					io_lib:format(
-						"The execution of the function has been stopped because it took more time than the expected, i.e. ~p ms.\n", 
-						[Timeout])),
+				format(
+					"The execution of the function has been stopped "
+					"because it took more time than the expected, i.e. ~p ms.\n", 
+					[Timeout]),
 			error({ErrorMsg, get_stacktrace()})
-	end.
-
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-% is_pure/2
-%%%%%%%%%%%%%%%%%%%%%%%%%%%%
-
-% To unify the interface of all the pre/post functions
-is_pure(_, Call) -> 
-	is_pure(Call).
-
-is_pure(Call) -> 
-	Self = 
-		self(),
-	StartRef = 
-		make_ref(),
-	EndRef = 
-		make_ref(),
-	Pid = 
-		spawn(
-			fun() -> 
-				receive 
-					{start, StartRef} -> 
-						ok
-				end,
-				Res = 
-					try Call() of
-						Res0 ->
-							Res0
-					catch
-						E1:E2  ->
-							{edbc_error_call, {E1, E2}}
-					end,
-				Self ! {Res, EndRef}
-			end),
-	erlang:trace(Pid, true, [call, set_on_spawn, procs, ports, send, 'receive']),
-	erlang:trace_pattern({'_','_','_'}, true, []),
-	Pid!{start, StartRef},
-	Result = 
-		is_pure_tracer(Pid, StartRef, EndRef, none),
-	case Result of 
-		edbc_error ->
-			error({"The function is not pure.",get_stacktrace()});
-		{edbc_error, Msg} ->
-			error({"The function is not pure." ++ Msg, get_stacktrace()});
-		{edbc_error_call, {error, Reason}} -> 
-			error({Reason, get_stacktrace()});
-		{edbc_error_call, {throw, Reason}} -> 
-			throw({Reason, get_stacktrace()});
-		{edbc_error_call, {exit, Reason}} -> 
-			exit({Reason, get_stacktrace()});
-		Res -> 
-			Res
-	end.
-
-is_pure_tracer(Pid, StartRef, EndRef, Res) -> 
-	receive 
-		{trace, Pid, exit, _} ->
-			Res;
-		{trace, Pid, 'receive', {start, StartRef}} -> 
-			is_pure_tracer(Pid, StartRef, EndRef, Res);
-		{trace, Pid, send, {_, EndRef}, _} ->
-			is_pure_tracer(Pid, StartRef, EndRef, Res);
-		{FRes, EndRef} -> 
-			case Res of 
-				none -> 
-					is_pure_tracer(Pid, StartRef, EndRef, FRes);
-				_ -> 
-					case FRes of 
-						{edbc_error_call, _} -> 
-							is_pure_tracer(Pid, StartRef, EndRef, FRes);
-						_ -> 
-							is_pure_tracer(Pid, StartRef, EndRef, Res)
-					end
-			end;
-		{trace, Pid, call, {M, F, Args}} -> 
-			Arity = length(Args),
-			case erlang:is_builtin(M, F, Arity) of 
-				true -> 
-					case erl_bifs:is_pure(M, F, Arity) of 
-						false -> 
-							InfoMsg = 
-								lists:flatten(
-									io_lib:format(
-										"It has call the unpure BIF ~p:~p/~p", 
-										[M, F, Arity])),
-							is_pure_tracer(Pid, StartRef, EndRef, {edbc_error, InfoMsg});
-						true -> 
-							is_pure_tracer(Pid, StartRef, EndRef, Res)
-					end;
-				false -> 
-					is_pure_tracer(Pid, StartRef, EndRef, Res)
-			end;
-		{trace, Pid, return_to, _} -> 
-			is_pure_tracer(Pid, StartRef, EndRef, Res);
-		{trace, Pid, return_from, _, _} -> 
-			is_pure_tracer(Pid, StartRef, EndRef, Res);
-		Msg -> 
-			% io:format("Other: ~p\n", [_Msg]),
-			InfoMsg = 
-				lists:flatten(
-					io_lib:format(
-						"It has produced the unpure action ~p\n", 
-						[Msg])),
-			is_pure_tracer(Pid, StartRef, EndRef, {edbc_error, InfoMsg})
 	end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
@@ -256,9 +191,17 @@ spec_check_pre(Pre, Call) ->
 		true -> 
 			Call();
 		false -> 
-			error({"The spec pre-condition is not hold.", get_stacktrace()});
+			ErrorMsg = 
+				format(
+					"The spec pre-condition does not hold. ~s.",
+					[last_call_str()]),
+			error({ErrorMsg, get(edbc_st)});
 		{false, Msg} -> 
-			error({"The spec pre-condition is not hold." ++ Msg, get_stacktrace()})
+			ErrorMsg = 
+				format(
+					"The spec pre-condition does not hold. ~s. ~s",
+					[last_call_str(), Msg]),
+			error({ErrorMsg, get(edbc_st)})
 	end.
 	
 
@@ -272,10 +215,263 @@ spec_check_post(Post, Call) ->
 		true -> 
 			Res;
 		false -> 
-			error({"The spec post-condition is not hold.", get_stacktrace()});
+			ErrorMsg = 
+				format(
+					"The spec post-condition does not hold. ~s.",
+					[last_call_str()]),
+			error({ErrorMsg, get(edbc_st)});
 		{false, Msg} -> 
-			error({"The spec post-condition is not hold." ++ Msg, get_stacktrace()})
+			ErrorMsg = 
+				format(
+					"The spec post-condition does not hold. ~s. ~s",
+					[last_call_str(), Msg]),
+			error({ErrorMsg, get(edbc_st)})
 	end.
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% is_pure/2
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+-record(pt_state, 
+			{
+				pid,
+				start_ref,
+				end_ref,
+				result = none,
+				impure_calls_exp = 0,
+				last_call
+			}).
+
+% This useless clause is defined to unify the interface of all the pre/post functions
+is_pure(_, Call) -> 
+	is_pure(Call).
+
+is_pure(Call) -> 
+	case get(already_tracing) of 
+		true -> 
+			% TODO: THink a way of trace functions when a tracing process is already running.
+			% A solution could be to create a new process an do the tracing there.  
+			Call();
+		_ -> 
+			Self = 
+				self(),
+			StartRef = 
+				make_ref(),
+			EndRef = 
+				make_ref(),
+			Pid = 
+				spawn(
+					fun() -> 
+						edbc_lib:put_already_tracing(true),
+						% edbc_lib:receive_start(),
+						receive 
+							{start, StartRef} -> 
+								ok
+						end,
+						Res = 
+							try Call() of
+								Res0 ->
+									Res0
+							catch
+								E1:E2  ->
+									{edbc_error_call, {E1, E2}}
+							end,
+						% edbc_lib:send_result(Self, Res, EndRef),
+						Self ! {trace, self(), result, Res, EndRef},
+						edbc_lib:put_already_tracing(false)
+					end), 
+			erlang:trace(Pid, true, [call, return_to, set_on_spawn, procs, ports, send, 'receive']),
+			erlang:trace_pattern({'_','_','_'}, true, []),
+			Pid!{start, StartRef},
+			Result = 
+				is_pure_tracer(
+					#pt_state{
+						pid = Pid,
+						start_ref = StartRef,
+						end_ref = EndRef,
+						last_call = get(edbc_cc)
+					}),
+			case Result of 
+				edbc_error ->
+					ErrorMsg = 
+						format(
+							"The function is not pure. ~s.",
+							[last_call_str()]),
+					error({ErrorMsg, get(edbc_st)});
+				{edbc_error, Msg} ->
+					ErrorMsg = 
+						format(
+							"The function is not pure. ~s. ~s",
+							[last_call_str(), Msg]),
+					error({ErrorMsg, get(edbc_st)});
+				{edbc_error_call, {error, Reason}} -> 
+					error({Reason, get(edbc_st)});
+				{edbc_error_call, {throw, Reason}} -> 
+					throw({Reason, get(edbc_st)});
+				{edbc_error_call, {exit, Reason}} -> 
+					exit({Reason, get(edbc_st)});
+				Res -> 
+					Res
+			end
+	end.
+
+% -record(pt_state, 
+			% {
+			% 	pid,
+			% 	start_ref,
+			% 	end_ref,
+			% 	result = none,
+			% 	impure_calls_exp = 0,
+			% 	last_call
+			% }).
+
+is_pure_tracer(
+		State = 
+			#pt_state{
+				pid = Pid,
+				start_ref = StartRef,
+				end_ref = EndRef,
+				result = Res,
+				impure_calls_exp = ImpureFuncExpected,
+				last_call = LastCall
+			}
+	) -> 
+	Msg = 
+		receive 
+			Msg0 ->
+				% io:format("Msg0: ~p\n", [Msg0]),
+				Msg0
+		end,
+	case Res of 
+		none -> 
+			case Msg of 
+				{trace, Pid, exit, _} ->
+					Res;
+				% Controls that the start receive is not considered as impure
+				{trace, Pid, 'receive', {start, StartRef}} -> 
+					is_pure_tracer(State);
+				% Controls that the result send is not considered as impure
+				{trace, Pid, send, {trace, Pid, result, _, EndRef}, _} ->
+					is_pure_tracer(State);
+				{trace, Pid, result, FRes, EndRef} -> 
+					case Res of 
+						none -> 
+							is_pure_tracer(State#pt_state{result = FRes});
+						_ -> 
+							case FRes of 
+								{edbc_error_call, _} -> 
+									is_pure_tracer(State#pt_state{result = FRes});
+								_ -> 
+									is_pure_tracer(State)
+							end
+					end;
+				{trace, Pid, call, {M, F, Args}} -> 
+					Arity = length(Args),
+					case erlang:is_builtin(M, F, Arity) of 
+						true -> 
+							PureBuiltIns = 
+								[{erlang, make_fun, 3}],
+							case erl_bifs:is_pure(M, F, Arity) of 
+								false -> 
+									% io:format("Is not pure: ~p. Tolerance: ~p\n", [{M, F, Arity}, ImpureFuncExpected]),
+									case lists:member({M, F, Arity}, PureBuiltIns) of 
+										false -> 
+											case ImpureFuncExpected of 
+												0 -> 
+													InfoMsg = 
+														format(
+															"It has call the unpure BIF ~p:~p/~p"
+															" when evaluating ~s.", 
+															[M, F, Arity, build_call_str(LastCall)]),
+													is_pure_tracer(State#pt_state{result = {edbc_error, InfoMsg}});
+												_ ->
+													is_pure_tracer(State#pt_state{impure_calls_exp = ImpureFuncExpected - 1})
+											end;
+										true -> 
+											is_pure_tracer(State)
+									end;
+								true -> 
+									is_pure_tracer(#pt_state{last_call = [{M, F} | Args]})
+							end;
+						false -> 
+							InteralImpureFuns = 
+								[
+									% {MFA, ExpectedImpureOperations}
+									{{edbc_lib, put_st, 0}, 3}, 
+									{{edbc_lib, put_call, 1}, 1},
+									{{edbc_lib, put_already_tracing, 1}, 1}
+								],
+							case [Expected || {ICall, Expected} <- InteralImpureFuns, {M, F, Arity} == ICall] of 
+								[] -> 
+									is_pure_tracer(#pt_state{last_call = [{M, F} | Args]});
+								[Exp] ->
+									% io:format("MODIFY EXP: ~p\n", [Exp]),
+									is_pure_tracer(State#pt_state{impure_calls_exp = Exp})
+							end
+					end;
+				{trace, Pid, return_to, _} -> 
+					is_pure_tracer(State);
+				{trace, Pid, return_from, _, _} -> 
+					is_pure_tracer(State);
+				Msg -> 
+					% io:format("Other: ~p\n", [Msg]),
+					InfoMsg = 
+						format(
+							"It has produced the unpure action ~p when evaluating ~s.", 
+							[Msg, build_call_str(LastCall)]),
+					is_pure_tracer(State#pt_state{result = {edbc_error, InfoMsg}})
+			end;
+		_ ->
+			% This makes the tracer to ignore further errors when the fisrt one is raised, i.e. only the first error is reported
+			case Msg of 
+				{trace, Pid, exit, _} ->
+					Res;
+				_ ->
+					is_pure_tracer(State)
+			end
+	end.	
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Put Info Functions
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+put_st() ->
+	put(edbc_st, get_stacktrace()).
+
+put_call(Args) ->
+	put(edbc_cc, Args).
+
+put_already_tracing(Bool) ->
+	put(already_tracing, Bool).
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% Printer functions
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+get_stacktrace() ->
+	tl(tl(try throw(42) catch 42 -> erlang:get_stacktrace() end)).
+
+build_call_str([{M, F} | Args]) ->
+	format(
+		"~p:~p(~s)",
+		[M, F, string:join(convert_lst_str(Args), ", ")]);
+build_call_str([Fun | Args]) ->
+	format(
+		"~p(~s)",
+		[Fun, string:join(convert_lst_str(Args), ", ")]).
+
+convert_lst_str(L) ->
+	lists:map(fun convert_str/1,L).
+
+convert_str(E) ->
+	format("~p",[E]).
+
+last_call_str() ->
+	"Last call: " ++ build_call_str(get(edbc_cc)).
+
+format(Str, Args) -> 			
+	lists:flatten(io_lib:format(Str, Args)).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % sheriff_call/2
@@ -292,8 +488,4 @@ spec_check_post(Post, Call) ->
 % 						"The value ~p is not of type ~p\n", 
 % 						[Value, Type])),
 % 			{false, InfoMsg}
-% 	end.	
-
-get_stacktrace() ->
-	tl(try throw(42) catch 42 -> erlang:get_stacktrace() end).
-
+% 	end.
