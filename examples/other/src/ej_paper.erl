@@ -187,6 +187,13 @@ fib(N) ->
 
 ?PRE(fun() -> length(?P(1)) > 0 end).
 
+% -spec find(list(integer()), integer())  -> integer().
+
+% ?PURE.
+
+% ?DECREASES(?P(1)).
+
+
 find(L, K) ->
     find(L, K, 1).
 
@@ -345,9 +352,9 @@ f_time(L) ->
 
 
 % This constract is forgetting the odd tasks.
-% ?EXPECTED_TIME(fun() -> 20 + (length(?P(1)) * 100) end).
+?EXPECTED_TIME(fun() -> 20 + (length(?P(1)) * 100) end).
 % This constract is the good one.
-?EXPECTED_TIME(fun() -> 20 + ((length(?P(1)) * 300) / 2) end).
+% ?EXPECTED_TIME(fun() -> 20 + ((length(?P(1)) * 300) / 2) end).
 
 f_time2(L) ->
     [f_time2_run(E) || E <- L].

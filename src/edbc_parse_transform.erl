@@ -64,7 +64,7 @@ parse_transform(Forms, Options) ->
 	% TODO: Remove the unsued function introduced by sheriff
 
 	% uncomment to print the pretty-printted version of the code
-	[io:format("~s\n", [lists:flatten(erl_prettypr:format(F))]) || F <- ReturnedForms],
+	% [io:format("~s\n", [lists:flatten(erl_prettypr:format(F))]) || F <- ReturnedForms],
 
 	ReturnedForms.
 

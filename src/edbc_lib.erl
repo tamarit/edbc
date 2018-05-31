@@ -120,14 +120,14 @@ post(Post, Call) ->
 		false -> 
 			ErrorMsg = 
 				format(
-					"The post-condition does not hold. ~s.",
-					[last_call_str()]),
+					"The post-condition does not hold. ~s. Result: ~p",
+					[last_call_str(), Res]),
 			error({ErrorMsg, get(edbc_st)});
 		{false, Msg} -> 
 			ErrorMsg = 
 				format(
-					"The post-condition does not hold. ~s. ~s",
-					[last_call_str(), Msg]),
+					"The post-condition does not hold. ~s. Result: ~p. ~s",
+					[last_call_str(), Res, Msg]),
 			error({ErrorMsg, get(edbc_st)})
 	end.
 
@@ -151,9 +151,10 @@ expected_time(Time, Call) ->
 		false -> 
 			ErrorMsg = 
 				format(
-					"The execution of the function took too much time\n"
-					"Real: ~p ms\nExpected: ~p ms\nDifference: ~p ms).\n", 
-					[ExeTime, Expected, ExeTime - Expected]),
+					"The execution of ~s"
+					" took too much time."
+					"Real: ~p ms. Expected: ~p ms. Difference: ~p ms).", 
+					[simple_last_call_str(), ExeTime, Expected, ExeTime - Expected]),
 			error({ErrorMsg, get_stacktrace()})
 	end.
 
@@ -176,9 +177,10 @@ timeout(Time, Call) ->
 		Timeout -> 
 			ErrorMsg = 
 				format(
-					"The execution of the function has been stopped "
-					"because it took more time than the expected, i.e. ~p ms.\n", 
-					[Timeout]),
+					"The execution of ~s" 
+					"has been stopped "
+					"because it took more time than the expected, i.e. ~p ms.", 
+					[simple_last_call_str(), Timeout]),
 			error({ErrorMsg, get_stacktrace()})
 	end.
 
@@ -468,7 +470,17 @@ convert_str(E) ->
 	format("~p",[E]).
 
 last_call_str() ->
-	"Last call: " ++ build_call_str(get(edbc_cc)).
+	"Last call: " ++ simple_last_call_str().
+
+simple_last_call_str() ->
+	ModCall = 
+		case {get(edbc_st), get(edbc_cc)} of 
+			{[{Mod,_,_,[]} | _], [F | Args]} -> 
+				[{Mod, F} | Args];
+			{_, Call} ->
+				Call
+		end,
+	build_call_str(ModCall).
 
 format(Str, Args) -> 			
 	lists:flatten(io_lib:format(Str, Args)).
@@ -489,3 +501,4 @@ format(Str, Args) ->
 % 						[Value, Type])),
 % 			{false, InfoMsg}
 % 	end.
+

@@ -69,6 +69,9 @@ load_ej_paper:
 	@scripts/edbc_erlc examples/other/src/ej_paper.erl examples/other/ebin
 	@scripts/edbc_erl examples/other/ebin 
 
+doc_ej_paper:
+	@scripts/edbc_edoc examples/other/src/ej_paper.erl examples/other/docs
+
 load_ej_temp:
 	@scripts/edbc_erlc examples/other/src/ej_temp.erl examples/other/ebin
 	@scripts/edbc_erl examples/other/ebin 
