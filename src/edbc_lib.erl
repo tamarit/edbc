@@ -95,13 +95,13 @@ pre(Pre, Call) ->
 		false -> 
 			ErrorMsg = 
 				format(
-					"The pre-condition does not hold. ~s.",
+					"The precondition does not hold. ~s.",
 					[last_call_str()]),
 			error({ErrorMsg, get(edbc_st)});
 		{false, Msg} -> 
 			ErrorMsg = 
 				format(
-					"The pre-condition does not hold. ~s. ~s",
+					"The precondition does not hold. ~s. ~s",
 					[last_call_str(), Msg]),
 			error({ErrorMsg, get(edbc_st)})
 	end.
@@ -120,13 +120,13 @@ post(Post, Call) ->
 		false -> 
 			ErrorMsg = 
 				format(
-					"The post-condition does not hold. ~s. Result: ~p",
+					"The postcondition does not hold. ~s. Result: ~p",
 					[last_call_str(), Res]),
 			error({ErrorMsg, get(edbc_st)});
 		{false, Msg} -> 
 			ErrorMsg = 
 				format(
-					"The post-condition does not hold. ~s. Result: ~p. ~s",
+					"The postcondition does not hold. ~s. Result: ~p. ~s",
 					[last_call_str(), Res, Msg]),
 			error({ErrorMsg, get(edbc_st)})
 	end.
@@ -178,8 +178,8 @@ timeout(Time, Call) ->
 			ErrorMsg = 
 				format(
 					"The execution of ~s" 
-					"has been stopped "
-					"because it took more time than the expected, i.e. ~p ms.", 
+					" has been stopped"
+					" because it took more time than the expected, i.e. ~p ms.", 
 					[simple_last_call_str(), Timeout]),
 			error({ErrorMsg, get_stacktrace()})
 	end.
@@ -195,13 +195,13 @@ spec_check_pre(Pre, Call) ->
 		false -> 
 			ErrorMsg = 
 				format(
-					"The spec pre-condition does not hold. ~s.",
+					"The spec precondition does not hold. ~s.",
 					[last_call_str()]),
 			error({ErrorMsg, get(edbc_st)});
 		{false, Msg} -> 
 			ErrorMsg = 
 				format(
-					"The spec pre-condition does not hold. ~s. ~s",
+					"The spec precondition does not hold. ~s. ~s",
 					[last_call_str(), Msg]),
 			error({ErrorMsg, get(edbc_st)})
 	end.
@@ -219,13 +219,13 @@ spec_check_post(Post, Call) ->
 		false -> 
 			ErrorMsg = 
 				format(
-					"The spec post-condition does not hold. ~s.",
+					"The spec postcondition does not hold. ~s.",
 					[last_call_str()]),
 			error({ErrorMsg, get(edbc_st)});
 		{false, Msg} -> 
 			ErrorMsg = 
 				format(
-					"The spec post-condition does not hold. ~s. ~s",
+					"The spec postcondition does not hold. ~s. ~s",
 					[last_call_str(), Msg]),
 			error({ErrorMsg, get(edbc_st)})
 	end.
@@ -342,13 +342,15 @@ is_pure_tracer(
 	Msg = 
 		receive 
 			Msg0 ->
-				% io:format("Msg0: ~p\n", [Msg0]),
+				io:format("Msg0: ~p\n", [Msg0]),
+				io:format("Pid: ~p\n", [Pid]),
 				Msg0
 		end,
 	case Res of 
 		none -> 
 			case Msg of 
 				{trace, Pid, exit, _} ->
+					io:format("RECEIVED EXIT\n"),
 					Res;
 				% Controls that the start receive is not considered as impure
 				{trace, Pid, 'receive', {start, StartRef}} -> 
@@ -428,8 +430,11 @@ is_pure_tracer(
 			% This makes the tracer to ignore further errors when the fisrt one is raised, i.e. only the first error is reported
 			case Msg of 
 				{trace, Pid, exit, _} ->
+					io:format("RECEIVED EXIT\n"),
 					Res;
 				_ ->
+					io:format("Res: ~p\n", [Res]),
+					io:format("Pid: ~p\n", [Pid]),
 					is_pure_tracer(State)
 			end
 	end.	
