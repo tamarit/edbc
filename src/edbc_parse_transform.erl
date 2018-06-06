@@ -161,6 +161,13 @@ search_edbc_funs(Forms) ->
 									none, 
 									AccInvariants
 								};
+							{edbc_sdecreases, 0} -> 
+								{
+									FunGetNewAccForms(PrevFun, AccForms),  
+									[Form | AccPres], 
+									none, 
+									AccInvariants
+								};
 							{edbc_expected_time, 0} -> 
 								{
 									FunGetNewAccForms(PrevFun, AccForms),  
@@ -351,12 +358,14 @@ build_funs(Forms, EDBC_ON, EDocGen) ->
 								end,
 								{[], [], []},
 								PREs0),
-						{PreDec0, PreOther0} = 
+						{PreDec, PreOther0} = 
 							lists:foldl(
 								fun(FormPre, {AccDec, AccOther}) ->
 									case fun_name_arity(FormPre) of
 										{edbc_decreases, 0} -> 
-											{[FormPre | AccDec], AccOther};
+											{[{FormPre, false}], AccOther};
+										{edbc_sdecreases, 0} -> 
+											{[{FormPre, true}], AccOther};
 										_Other ->
 											% io:format("Other: ~p\n", [_Other]),
 											{AccDec, [FormPre | AccOther]}
@@ -364,24 +373,25 @@ build_funs(Forms, EDBC_ON, EDocGen) ->
 								end,
 								{[], []},
 								PREs),
-						{PreDec, PreOther} =
-							{lists:reverse(PreDec0), lists:reverse(PreOther0)},
+						PreOther =
+							lists:reverse(PreOther0),
 						{NewForm, NAcc} = 
 							case {PreDec, EDBC_ON} of 
-								{[PreDecFun | _], true} ->	
+								{[{PreDecFun, IsStrict}], true} ->	
 									{NewForm0, AuxFuns} = 	
 										transform_decreases_function(
 											Form,
-											extract_decrease_paramenter(PreDecFun)),
+											extract_decrease_paramenter(PreDecFun),
+											IsStrict),
 									{
 										NewForm0,
 										AuxFuns ++ Acc
 									};
-								{[PreDecFun | _], false} ->
+								{[{PreDecFun, IsStrict}], false} ->
 									ParNumber = 
 										extract_decrease_paramenter(PreDecFun),
 									{
-										gen_edoc(Form, EDocGen, {{edbc_decreases, 0}, ParNumber}), 
+										gen_edoc(Form, EDocGen, {{edbc_decreases, 0, IsStrict}, ParNumber}), 
 										Acc
 									};
 								_ -> 
@@ -701,8 +711,15 @@ transform_post_function(Form, FunOrBody, OtherForms) ->
 % DECREASES transformation
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
-transform_decreases_function(Function, ParNumbers) ->
+transform_decreases_function(Function, ParNumbers, IsStrict) ->
 	% io:format("ParNumber: ~p\n", [ParNumber]),
+	DecFun = 
+		case IsStrict of 
+			true ->
+				sdecreasing_check;
+			false ->
+				decreasing_check
+		end,
 	FunctionName =
 		erl_syntax:function_name(Function),
 	AuxFunctionName = 
@@ -746,7 +763,7 @@ transform_decreases_function(Function, ParNumbers) ->
 		erl_syntax:application(
 			erl_syntax:module_qualifier(
 				erl_syntax:atom(edbc_lib),
-				erl_syntax:atom(decreasing_check)),
+				erl_syntax:atom(DecFun)),
 			[
 				AuxFunctionNewValuePar,
 				AuxFunctionOldValuePar,
@@ -960,9 +977,18 @@ gen_edoc(Form, true, Contract) ->
 		Form, 
 		erl_syntax:get_precomments(Form) ++ [NComment]).
 
-edoc_contract({{edbc_decreases, 0}, ParNumbers}) -> 
+edoc_contract({{edbc_decreases, 0, IsStrict}, ParNumbers}) -> 
+	StrictStr = 
+		case IsStrict of 
+			true ->
+				"STRICTLY ";
+			false ->
+				""
+		end,
 	[
-			" <b>DECREASES:</b> The parameter number " 
+			" <b>"
+		++ 	StrictStr
+		++	"DECREASES:</b> The parameter number " 
 		++ 	integer_to_list(ParNumber) 
 		++ 	"." 
 	|| 

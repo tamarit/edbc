@@ -2,6 +2,7 @@
 -export([
 			post_invariant/2, 
 			decreasing_check/3, 
+			sdecreasing_check/3, 
 			pre/2, 
 			post/2,
 			expected_time/2,
@@ -50,9 +51,15 @@ post_invariant(_, ignore) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 decreasing_check(NewValues, OldValues, F) -> 
+	decreasing_check_gen(NewValues, OldValues, F, fun(A, B) -> A =< B end).
+
+sdecreasing_check(NewValues, OldValues, F) -> 
+	decreasing_check_gen(NewValues, OldValues, F, fun(A, B) -> A < B end).
+
+decreasing_check_gen(NewValues, OldValues, F, CompFun) -> 
 	case lists:all(
 			fun(B) -> B end,
-			[NewValue =< OldValue 
+			[CompFun(NewValue, OldValue) 
 			|| {NewValue, OldValue} <- lists:zip(NewValues, OldValues)]) 
 	of 
 		true -> 
@@ -79,8 +86,6 @@ decreasing_check(NewValues, OldValues, F) ->
 					[build_call_str([FN | OldValues]), build_call_str([FN | NewValues]), Msg]),
 			error({ErrorMsg, get(edbc_st)})
 	end.
-
-% Sacar modulo de la stack para poder ponerselo a la call
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % pre/2

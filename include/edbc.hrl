@@ -14,6 +14,9 @@
 % Checks that a parameter (or a list of parameters) is decreased in recursive calls (only working for self-recursive function now)
 -define(DECREASES(PAR), edbc_decreases() -> PAR).
 
+% Checks that a parameter (or a list of parameters) is decreased in recursive calls (only working for self-recursive function now)
+-define(SDECREASES(PAR), edbc_sdecreases() -> PAR).
+
 % Checks that the execution time is less or equal than FUN(). Function FUN can include parameters, i.e. it can use the macro ?P/1.
 -define(EXPECTED_TIME(FUN), edbc_expected_time() -> FUN).
 

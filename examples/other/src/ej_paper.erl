@@ -165,7 +165,7 @@ abs_neg(N) ->
 % }
 
 ?PRE(fun() -> ?P(1) >= 0 end).
-?DECREASES(?P(1)).
+?SDECREASES(?P(1)).
 
 % To see how it fails just remove the clause for number 1.
 
@@ -352,9 +352,11 @@ f_time(L) ->
 
 
 % This constract is forgetting the odd tasks.
-?EXPECTED_TIME(fun() -> 20 + (length(?P(1)) * 100) end).
+% ?EXPECTED_TIME(fun() -> 20 + (length(?P(1)) * 100) end).
 % This constract is the good one.
-% ?EXPECTED_TIME(fun() -> 20 + ((length(?P(1)) * 300) / 2) end).
+?EXPECTED_TIME(fun() -> 20 + ((length(?P(1)) * 300) / 2) end).
+
+% ej_paper:f_time2(lists:seq(1, 10)).
 
 f_time2(L) ->
     [f_time2_run(E) || E <- L].
