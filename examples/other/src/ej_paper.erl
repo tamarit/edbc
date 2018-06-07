@@ -166,6 +166,7 @@ abs_neg(N) ->
 
 ?PRE(fun() -> ?P(1) >= 0 end).
 ?SDECREASES(?P(1)).
+-spec fib(integer()) -> integer().
 
 % To see how it fails just remove the clause for number 1.
 
