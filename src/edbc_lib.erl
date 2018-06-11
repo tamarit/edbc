@@ -50,6 +50,8 @@ correct_message_invariant(F, State) ->
 	case F(State) of 
 		true ->
 			true;
+		{true, _} ->
+			true;
 		Other ->
 			{Other, invariant}
 	end.
@@ -130,10 +132,7 @@ post(Post, Call) ->
 			Res;
 		{true, _} -> 
 			Res;
-		{{true, _}, invariant} -> 
-			Res;
 		{Rep, invariant} ->
-			io:format("PETA: ~p\n", [Rep]),
 			show_post_report(Rep, Res, "invariant");
 		Rep -> 
 			show_post_report(Rep, Res, "postcondition")
