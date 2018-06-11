@@ -22,29 +22,37 @@
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 post_invariant(F, {ok, State}) -> 
-	F(State);
+	correct_message_invariant(F, State);
 post_invariant(F, {ok, State, _}) -> 
-	F(State);
+	correct_message_invariant(F, State);
 post_invariant(F, {noreply, State}) -> 
-	F(State);
+	correct_message_invariant(F, State);
 post_invariant(F, {noreply, State, _}) -> 
-	F(State);
+	correct_message_invariant(F, State);
 post_invariant(F, {stop, _, State}) -> 
-	F(State);
+	correct_message_invariant(F, State);
 post_invariant(F, {reply, _, State}) -> 
-	F(State);
+	correct_message_invariant(F, State);
 post_invariant(F, {reply, _, State, _}) -> 
-	F(State);
+	correct_message_invariant(F, State);
 post_invariant(F, {stop, _, _, State}) -> 
-	F(State);
+	correct_message_invariant(F, State);
 post_invariant(F, {true, State}) -> 
-	F(State);
+	correct_message_invariant(F, State);
 post_invariant(F, {false, State}) -> 
-	F(State);
+	correct_message_invariant(F, State);
 post_invariant(_, {error, _}) -> 
 	true;
 post_invariant(_, ignore) -> 
 	true.
+
+correct_message_invariant(F, State) ->
+	case F(State) of 
+		true ->
+			true;
+		Other ->
+			{Other, invariant}
+	end.
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % decreasing_check/3
@@ -122,19 +130,30 @@ post(Post, Call) ->
 			Res;
 		{true, _} -> 
 			Res;
+		{{true, _}, invariant} -> 
+			Res;
+		{Rep, invariant} ->
+			io:format("PETA: ~p\n", [Rep]),
+			show_post_report(Rep, Res, "invariant");
+		Rep -> 
+			show_post_report(Rep, Res, "postcondition")
+	end.
+
+show_post_report(Rep, Res, StrPost) ->
+	case Rep of 
 		false -> 
 			ErrorMsg = 
 				format(
-					"The postcondition does not hold. ~s. Result: ~p",
-					[last_call_str(), Res]),
+					"The ~s does not hold. ~s. Result: ~p",
+					[StrPost, last_call_str(), Res]),
 			error({ErrorMsg, get(edbc_st)});
 		{false, Msg} -> 
 			ErrorMsg = 
 				format(
-					"The postcondition does not hold. ~s. Result: ~p. ~s",
-					[last_call_str(), Res, Msg]),
+					"The ~s does not hold. ~s. Result: ~p. ~s",
+					[StrPost, last_call_str(), Res, Msg]),
 			error({ErrorMsg, get(edbc_st)})
-	end.
+	end.	
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%
 % expected_time/2
