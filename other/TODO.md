@@ -5,13 +5,16 @@ PRE, POST, ...
 
 - Produce default values instead of an error, i.e. ?PRE(fun.., DefaultValue). An alternative to a different macro is to return {false, {default_value, Value}} in the PRE function.
 - Produce a personalized error message for PREs y POSTs, i.e. ?PRE(fun.., ErrorMsg). An alternative to a specific macro is to return {false, Msg}.
-- Last two extensions are mutually exclusive. If there is a default value, then there is not sens for an error message, and viceversa. This is automatically dsone by an specific message error.
+- Last two extensions are mutually exclusive. If there is a default value, then there is not sense for an error message, and viceversa. This is automatically done by an specific message error.
 
 - decreases for a recursions a -> b -> a -> b
 - One option to do this is by using tracing. Each time a call to the function is detected the check is performed.
 
 - The top of the stack has not postion info. This is unsalvable even by copying attributes from the original form.
 
+- Add a comparsion function to the decrease function so the decision of whether a parameter is decreasing or not is not only done by < or =<.
+
+- Add exception to the contracts
 
 
 GEN_SERVER_CPRE
