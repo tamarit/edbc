@@ -7,6 +7,8 @@ PRE, POST, ...
 - Produce a personalized error message for PREs y POSTs, i.e. ?PRE(fun.., ErrorMsg). An alternative to a specific macro is to return {false, Msg}.
 - Last two extensions are mutually exclusive. If there is a default value, then there is not sense for an error message, and viceversa. This is automatically done by an specific message error.
 
+- Plantear la posibilidad de que falle más de una PRE o una POST.
+
 - decreases for a recursions a -> b -> a -> b
 - One option to do this is by using tracing. Each time a call to the function is detected the check is performed.
 
