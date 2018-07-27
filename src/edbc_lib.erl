@@ -408,7 +408,7 @@ is_pure_tracer(
 												0 -> 
 													InfoMsg = 
 														format(
-															"It has call the unpure BIF ~p:~p/~p"
+															"It has call the impure BIF ~p:~p/~p"
 															" when evaluating ~s.", 
 															[M, F, Arity, build_call_str(LastCall)]),
 													is_pure_tracer(State#pt_state{result = {edbc_error, InfoMsg}});
@@ -445,7 +445,7 @@ is_pure_tracer(
 					% io:format("Other: ~p\n", [Msg]),
 					InfoMsg = 
 						format(
-							"It has produced the unpure action ~p when evaluating ~s.", 
+							"It has produced the impure action ~p when evaluating ~s.", 
 							[Msg, build_call_str(LastCall)]),
 					is_pure_tracer(State#pt_state{result = {edbc_error, InfoMsg}})
 			end;
